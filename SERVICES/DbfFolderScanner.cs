@@ -16,20 +16,29 @@ namespace ARISHrms.Services
         public string FileName => Path.GetFileName(FullPath);
         public int RecordCount { get; set; }
         public List<DbfField> Columns { get; set; } = new List<DbfField>();
-        public string Kind { get; set; } = "Unrecognized";
+        public string Kind { get; set; } = "Other";
         public string Error { get; set; }
         public int MappedColumns { get; set; }
+
+        /// <summary>3 = EMPMAS, 2 = mstsal, 1 = monsum (the files the old Payroll Companion read), 0 = other.</summary>
+        public int Priority { get; set; }
+        public bool IsUsed { get; set; }
     }
 
     public class DbfScanResult
     {
         public string Folder { get; set; } = "";
         public List<DbfFileInfo> Files { get; } = new List<DbfFileInfo>();
-        public DbfFileInfo EmployeeMasterFile { get; set; }
+
+        /// <summary>Files actually used to build the employee list, highest priority first.</summary>
+        public List<DbfFileInfo> SourceFiles { get; } = new List<DbfFileInfo>();
+        public DbfFileInfo EmployeeMasterFile => SourceFiles.FirstOrDefault();
+
         public int EmployeesImported { get; set; }
+        public int ActiveCount { get; set; }
+        public int LeftCount { get; set; }
         public string ReportPath { get; set; }
         public string MappingSummary { get; set; } = "";
-        public string NamesSourceFile { get; set; }
 
         public string ToReportText()
         {
@@ -42,7 +51,7 @@ namespace ARISHrms.Services
             foreach (var f in Files.OrderBy(x => x.FileName, StringComparer.OrdinalIgnoreCase))
             {
                 sb.AppendLine();
-                sb.AppendLine($"{f.FileName}   [{f.Kind}]");
+                sb.AppendLine($"{f.FileName}   [{f.Kind}]{(f.IsUsed ? "  <- used for employees" : "")}");
                 if (f.Error != null)
                 {
                     sb.AppendLine($"   Could not read: {f.Error}");
@@ -54,11 +63,10 @@ namespace ARISHrms.Services
 
             sb.AppendLine();
             sb.AppendLine(new string('-', 70));
-            sb.AppendLine(EmployeeMasterFile != null
-                ? $"Employee master used: {EmployeeMasterFile.FileName} -> {EmployeesImported} employee(s) imported/updated"
-                : "No employee master file was recognized in this folder.");
-            if (NamesSourceFile != null)
-                sb.AppendLine($"Employee names taken from: {NamesSourceFile}");
+            sb.AppendLine(SourceFiles.Count > 0
+                ? $"Employee files used (in priority order): {string.Join(" > ", SourceFiles.Select(f => f.FileName))}\n" +
+                  $"Employees imported/updated: {EmployeesImported}  (active {ActiveCount}, left {LeftCount})"
+                : "No employee file was recognized in this folder.");
             if (!string.IsNullOrEmpty(MappingSummary))
             {
                 sb.AppendLine();
@@ -69,12 +77,25 @@ namespace ARISHrms.Services
     }
 
     /// <summary>
-    /// Scans a folder for .dbf files, reads each file's header, recognizes the ones it knows how
-    /// to import, and produces a report of everything it found.
+    /// Scans a folder for .dbf files and builds the employee list the same way the old ARIS Payroll
+    /// Companion did: EMPMAS.DBF, then mstsal.DBF, then monsum.DBF are merged (the first file to supply a
+    /// value wins, later files fill blanks). If none of those files exist, the best employee-looking
+    /// file (by its columns) is used instead.
     /// </summary>
     public static class DbfFolderScanner
     {
         private const int MaxFiles = 300;
+
+        private static int PriorityForName(string path)
+        {
+            switch (Path.GetFileNameWithoutExtension(path).ToLowerInvariant())
+            {
+                case "empmas": return 3;
+                case "mstsal": return 2;
+                case "monsum": return 1;
+                default: return 0;
+            }
+        }
 
         public static DbfScanResult Scan(string folder, bool includeSubfolders = true)
         {
@@ -93,16 +114,18 @@ namespace ARISHrms.Services
             };
             var paths = Directory.EnumerateFiles(folder, "*.dbf", options).Take(MaxFiles).ToList();
 
-            long bestScore = -1;
+            DbfFileInfo bestGeneric = null;
+            long bestGenericScore = -1;
+            var candidatesByPriority = new Dictionary<int, List<(DbfFileInfo info, int depth)>>();
 
             foreach (var path in paths)
             {
-                var info = new DbfFileInfo { FullPath = path };
+                var info = new DbfFileInfo { FullPath = path, Priority = PriorityForName(path) };
                 result.Files.Add(info);
 
                 try
                 {
-                    // Read just the header + first row first (fast, safe for big files)
+                    // Read just the header + first row (fast, safe for big files)
                     var peek = DbfReader.Read(path, 1);
                     info.RecordCount = peek.RecordCount;
                     info.Columns = peek.Fields;
@@ -110,19 +133,25 @@ namespace ARISHrms.Services
                     var cols = DbfReader.MapEmployeeColumns(peek);
                     info.MappedColumns = cols.Score;
 
-                    if (cols.IsEmployeeMaster)
+                    bool hasIdentity = cols.Code != null || cols.Card != null || cols.CompCode != null;
+
+                    if (info.Priority > 0 && hasIdentity)
                     {
-                        info.Kind = "Employee master";
-                        // Priority: file named like the payroll summary (monsum) > other "master"-like names
-                        // > more mapped columns > more records
-                        string fn = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
-                        int hint = fn.Contains("monsum") ? 2 : (fn.Contains("empmast") || fn.Contains("employee") || fn.Contains("master")) ? 1 : 0;
-                        long score = hint * 1_000_000_000L + cols.Score * 1_000_000L + Math.Min(peek.RecordCount, 999_999);
-                        if (score > bestScore)
-                        {
-                            bestScore = score;
-                            result.EmployeeMasterFile = info;
-                        }
+                        info.Kind = $"Employee file ({Path.GetFileNameWithoutExtension(path).ToUpperInvariant()})";
+                        int depth = path.Substring(folder.Length).Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar);
+                        if (!candidatesByPriority.TryGetValue(info.Priority, out var list))
+                            candidatesByPriority[info.Priority] = list = new List<(DbfFileInfo, int)>();
+                        list.Add((info, depth));
+                    }
+                    else if (info.Priority > 0)
+                    {
+                        info.Kind = "Expected employee file, but no employee-code column found";
+                    }
+                    else if (cols.IsEmployeeMaster)
+                    {
+                        info.Kind = "Possible employee file";
+                        long score = cols.Score * 1_000_000L + Math.Min(peek.RecordCount, 999_999);
+                        if (score > bestGenericScore) { bestGenericScore = score; bestGeneric = info; }
                     }
                 }
                 catch (Exception ex)
@@ -132,35 +161,81 @@ namespace ARISHrms.Services
                 }
             }
 
+            // Highest priority first (EMPMAS > mstsal > monsum). If a name exists in several subfolders
+            // (backup copies), use the one closest to the folder the user picked.
+            foreach (var kv in candidatesByPriority.OrderByDescending(k => k.Key))
+            {
+                var pick = kv.Value.OrderBy(x => x.depth).ThenByDescending(x => x.info.RecordCount).First().info;
+                pick.IsUsed = true;
+                result.SourceFiles.Add(pick);
+            }
+
+            // None of the known names exist: fall back to the best employee-looking file
+            if (result.SourceFiles.Count == 0 && bestGeneric != null)
+            {
+                bestGeneric.IsUsed = true;
+                bestGeneric.Kind = "Employee file (detected by columns)";
+                result.SourceFiles.Add(bestGeneric);
+            }
+
             return result;
         }
 
-        /// <summary>Import employees from the recognized employee-master file (if any).</summary>
+        /// <summary>Import employees from the recognized employee file(s).</summary>
         public static int ImportEmployees(DbfScanResult scan)
         {
-            if (scan.EmployeeMasterFile == null)
+            if (scan.SourceFiles.Count == 0)
                 return 0;
 
-            var table = DbfReader.Read(scan.EmployeeMasterFile.FullPath);
-            var cols = DbfReader.MapEmployeeColumns(table);
-            var employees = DbfReader.ReadEmployees(table);
-            if (employees.Count == 0)
+            var perFile = new List<List<Employee>>();
+            var mappings = new StringBuilder();
+            EmployeeColumns firstCols = null;
+
+            foreach (var file in scan.SourceFiles)
+            {
+                var table = DbfReader.Read(file.FullPath);
+                var cols = DbfReader.MapEmployeeColumns(table);
+                firstCols ??= cols;
+
+                var employees = DbfReader.ReadEmployees(table);
+                perFile.Add(employees);
+                mappings.AppendLine(DescribeMapping(file.FileName, cols, employees.Count));
+            }
+
+            var merged = DbfReader.MergeEmployees(perFile);
+            if (merged.Count == 0)
                 return 0;
 
-            // The main file (e.g. monsum.dbf) may have no names - look for them in another DBF of the folder
-            if (cols.Name == null)
-                FillNamesFromOtherFiles(scan, employees);
+            // Last resort: none of the files had names (e.g. only monsum was found) - look in other DBFs
+            if (merged.Any(e => string.IsNullOrEmpty(e.FullName)))
+                FillNamesFromOtherFiles(scan, merged, mappings);
 
-            UpsertEmployees(employees);
-            scan.EmployeesImported = employees.Count;
-            scan.MappingSummary = BuildMappingSummary(scan.EmployeeMasterFile.FileName, cols, employees, scan.NamesSourceFile);
-            return employees.Count;
+            UpsertEmployees(merged);
+
+            scan.EmployeesImported = merged.Count;
+            scan.ActiveCount = merged.Count(e => e.Status != "N");
+            scan.LeftCount = merged.Count(e => e.Status == "N");
+
+            mappings.AppendLine();
+            mappings.AppendLine("First 5 employees imported:");
+            foreach (var e in merged.Take(5))
+                mappings.AppendLine($"  {e.EmpCode} | {e.FullName} | card {e.CardNo} | dept {e.Department} | cat {e.Category} | desig {e.Designation} | basic {e.BasicSalary:0.##} | wage {e.WageType} | status {(string.IsNullOrEmpty(e.Status) ? "-" : e.Status)}");
+            scan.MappingSummary = mappings.ToString();
+            return merged.Count;
         }
 
-        private static void FillNamesFromOtherFiles(DbfScanResult scan, List<Employee> employees)
+        private static string DescribeMapping(string file, EmployeeColumns c, int count)
+        {
+            string M(string col) => col ?? "-";
+            return $"{file}: {count} employee(s)\n" +
+                   $"   code={M(c.Code)}  card={M(c.Card)}/{M(c.CompCode)}  name={M(c.Name)}  dept={M(c.Dept)}  cat={M(c.Category)}  " +
+                   $"desig={M(c.Designation)}  basic={M(c.Basic)}  wage={M(c.WageType)}  month={M(c.YearMonth)}  leaving={M(c.LeavingDate)}";
+        }
+
+        private static void FillNamesFromOtherFiles(DbfScanResult scan, List<Employee> employees, StringBuilder log)
         {
             foreach (var file in scan.Files
-                .Where(f => f != scan.EmployeeMasterFile && f.Error == null && f.RecordCount > 0)
+                .Where(f => !f.IsUsed && f.Error == null && f.RecordCount > 0)
                 .OrderByDescending(f => f.RecordCount))
             {
                 try
@@ -171,42 +246,25 @@ namespace ARISHrms.Services
                     if (c.Code == null || c.Name == null) continue;   // header says this file has no code+name
 
                     var names = DbfReader.ReadNames(DbfReader.Read(file.FullPath));
-                    if (names.Count == 0) continue;
-
                     int filled = 0;
                     foreach (var emp in employees)
                         if (string.IsNullOrEmpty(emp.FullName) && names.TryGetValue(emp.EmpCode, out var n))
                         { emp.FullName = n; filled++; }
 
-                    if (filled > 0) { scan.NamesSourceFile = file.FileName; return; }
+                    if (filled > 0)
+                    {
+                        log.AppendLine($"Names for {filled} employee(s) were filled in from {file.FileName}");
+                        return;
+                    }
                 }
                 catch { /* unreadable file - try the next one */ }
             }
         }
 
-        private static string BuildMappingSummary(string file, EmployeeColumns c, List<Employee> employees, string namesFile)
-        {
-            string M(string col) => col ?? "(not found in file)";
-            var sb = new StringBuilder();
-            sb.AppendLine($"How {file} was read");
-            sb.AppendLine($"  Employee code : {M(c.Code)}");
-            sb.AppendLine($"  Name          : {M(c.Name)}{(c.Name == null && namesFile != null ? "  -> filled from " + namesFile : "")}");
-            sb.AppendLine($"  Department    : {M(c.Dept)}");
-            sb.AppendLine($"  Category      : {M(c.Category)}");
-            sb.AppendLine($"  Designation   : {M(c.Designation)}");
-            sb.AppendLine($"  Basic salary  : {M(c.Basic)}");
-            sb.AppendLine($"  Wage type     : {M(c.WageType)}");
-            sb.AppendLine($"  Month column  : {M(c.YearMonth)}  (latest month used per employee)");
-            sb.AppendLine();
-            sb.AppendLine("First 5 employees imported:");
-            foreach (var e in employees.Take(5))
-                sb.AppendLine($"  {e.EmpCode} | {e.FullName} | dept {e.Department} | cat {e.Category} | desig {e.Designation} | basic {e.BasicSalary:0.##} | wage {e.WageType}");
-            return sb.ToString();
-        }
-
         /// <summary>
         /// Insert new employees and update existing ones. Only values that are actually present in the
         /// DBF overwrite what is stored, so details entered inside this app are never erased.
+        /// A status ("Y"/"N") only changes when a LEAVING_DT column told us something.
         /// </summary>
         public static void UpsertEmployees(List<Employee> employees)
         {
@@ -216,8 +274,8 @@ namespace ARISHrms.Services
                 using (var transaction = connection.BeginTransaction())
                 {
                     connection.Execute(@"
-                        INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType)
-                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, COALESCE(NULLIF(@Shift, ''), 'B'), @Designation, @BasicSalary, @WageType)
+                        INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType, Status)
+                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, COALESCE(NULLIF(@Shift, ''), 'B'), @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'))
                         ON CONFLICT(EmpCode) DO UPDATE SET
                             CardNo = CASE WHEN excluded.CardNo <> '' THEN excluded.CardNo ELSE Employees.CardNo END,
                             FullName = CASE WHEN excluded.FullName <> '' THEN excluded.FullName ELSE Employees.FullName END,
@@ -226,7 +284,8 @@ namespace ARISHrms.Services
                             Shift = CASE WHEN @Shift <> '' THEN @Shift ELSE Employees.Shift END,
                             Designation = CASE WHEN excluded.Designation <> '' THEN excluded.Designation ELSE Employees.Designation END,
                             BasicSalary = CASE WHEN excluded.BasicSalary > 0 THEN excluded.BasicSalary ELSE Employees.BasicSalary END,
-                            WageType = CASE WHEN excluded.WageType <> '' THEN excluded.WageType ELSE Employees.WageType END;",
+                            WageType = CASE WHEN excluded.WageType <> '' THEN excluded.WageType ELSE Employees.WageType END,
+                            Status = CASE WHEN @Status <> '' THEN @Status ELSE Employees.Status END;",
                         employees, transaction);
                     transaction.Commit();
                 }

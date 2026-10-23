@@ -26,7 +26,7 @@ namespace ARISHrms.Services
     /// <summary>Which DBF column feeds which employee property (null = not present in the file).</summary>
     public class EmployeeColumns
     {
-        public string Code, Card, Name, Dept, Category, Shift, Designation, Basic, WageType, YearMonth;
+        public string Code, Card, CompCode, Name, Dept, Category, Shift, Designation, Basic, WageType, YearMonth, LeavingDate;
 
         /// <summary>How many of the useful columns were found.</summary>
         public int Score => new[] { Code, Card, Name, Dept, Category, Shift, Designation, Basic }.Count(c => c != null);
@@ -138,18 +138,21 @@ namespace ARISHrms.Services
         /// <summary>Find which columns of a DBF correspond to employee-master fields.</summary>
         public static EmployeeColumns MapEmployeeColumns(DbfTable table) => new EmployeeColumns
         {
-            // EMP_CODE is checked before EMPCD (monsum.dbf has both)
-            Code = FindColumn(table, "EMPCODE", "EMPCD", "ECODE", "EMPNO", "EMPID", "EMPLOYEEID",
+            // Same names the old ARIS Payroll Companion used: EMPCD (code), CARDNO / COMP_CODE (card),
+            // EMPNM (name), DEPT, DESIG, CAT, LEAVING_DT. Other common spellings are accepted as fallbacks.
+            Code = FindColumn(table, "EMPCD", "EMPCODE", "ECODE", "EMPNO", "EMPID", "EMPLOYEEID",
                               "EMPLOYEECODE", "PERNO", "CODE", "ID"),
             Card = FindColumn(table, "CARDNO", "CARD", "CARDNUM", "CARDNUMBER"),
-            Name = FindColumn(table, "NAME", "EMPNAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
+            CompCode = FindColumn(table, "COMPCODE"),
+            Name = FindColumn(table, "EMPNM", "EMPNAME", "NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
             Dept = FindColumn(table, "DEPT", "DEPARTMENT", "DEPTCODE", "DEPTNAME"),
             Category = FindColumn(table, "CAT", "CATEGORY", "CATCODE"),
             Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE"),
             Designation = FindColumn(table, "DESIG", "DESIGNATION", "DESIGCODE"),
             Basic = FindColumn(table, "BASIC", "BASICSALARY", "BASICPAY"),
             WageType = FindColumn(table, "WAGETYPE", "WAGETYP"),
-            YearMonth = FindColumn(table, "YRMONTH", "YEARMONTH", "PAYMONTH")
+            YearMonth = FindColumn(table, "YRMONTH", "YEARMONTH", "PAYMONTH"),
+            LeavingDate = FindColumn(table, "LEAVINGDT", "LEAVINGDATE", "LEAVEDT")
         };
 
         /// <summary>Turns a YRMONTH-style value (202607, 2026-07, 07/2026, 072026) into a sortable number, or null.</summary>
@@ -169,13 +172,26 @@ namespace ARISHrms.Services
             decimal.TryParse((raw ?? "").Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
 
         /// <summary>
-        /// Build employees from an already-loaded table. When the file has several rows per employee
-        /// (one per month), the latest month wins; if months can't be read, the last row in the file wins.
+        /// Old-app rule: a blank LEAVING_DT (ignoring '-', '/', '0') means the employee is active.
+        /// Returns "" when the file has no LEAVING_DT column, meaning "unknown - leave status unchanged".
+        /// </summary>
+        private static string StatusFromLeaving(string raw, bool hasColumn)
+        {
+            if (!hasColumn) return "";
+            string cleaned = (raw ?? "").Replace("-", "").Replace("/", "").Replace("0", "").Trim();
+            return cleaned.Length == 0 ? "Y" : "N";
+        }
+
+        /// <summary>
+        /// Build employees from an already-loaded table, following the old Payroll Companion rules:
+        /// code = EMPCD (falls back to the card number), card = CARDNO or COMP_CODE padded to 8 digits.
+        /// When the file has several rows per employee (one per month), the latest month wins; if months
+        /// can't be read, the last row in the file wins.
         /// </summary>
         public static List<Employee> ReadEmployees(DbfTable table)
         {
             var cols = MapEmployeeColumns(table);
-            if (cols.Code == null) return new List<Employee>();
+            if (cols.Code == null && cols.Card == null && cols.CompCode == null) return new List<Employee>();
 
             string Get(Dictionary<string, string> row, string col) =>
                 col != null && row.TryGetValue(col, out var v) ? (v ?? "").Trim() : "";
@@ -186,8 +202,16 @@ namespace ARISHrms.Services
             foreach (var row in table.Rows)
             {
                 rowIndex++;
-                string code = NormalizeEmpCode(Get(row, cols.Code));
+
+                string card = Get(row, cols.Card);
+                if (string.IsNullOrEmpty(card)) card = Get(row, cols.CompCode);
+
+                string code = Get(row, cols.Code);
+                if (string.IsNullOrWhiteSpace(code)) code = card;      // old app: no code -> use card number
+                code = NormalizeEmpCode(code);
                 if (string.IsNullOrEmpty(code)) continue;
+
+                if (card.Length > 0 && card.Length < 8) card = card.PadLeft(8, '0');
 
                 // order = month (if readable) * 1e9 + row index, so a later month always beats an earlier one
                 long month = MonthKey(Get(row, cols.YearMonth)) ?? 0;
@@ -199,18 +223,55 @@ namespace ARISHrms.Services
                 latest[code] = (order, new Employee
                 {
                     EmpCode = code,
-                    CardNo = Get(row, cols.Card),
+                    CardNo = card,
                     FullName = Get(row, cols.Name),
                     Department = Get(row, cols.Dept),
                     Category = Get(row, cols.Category),
                     Shift = Get(row, cols.Shift),
                     Designation = Get(row, cols.Designation),
                     BasicSalary = ParseDecimal(Get(row, cols.Basic)),
-                    WageType = Get(row, cols.WageType)
+                    WageType = Get(row, cols.WageType),
+                    Status = StatusFromLeaving(Get(row, cols.LeavingDate), cols.LeavingDate != null)
                 });
             }
 
             return latest.Values.Select(v => v.emp).OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// Combine employees from several files the way the old app did: sources are given in priority
+        /// order (EMPMAS, mstsal, monsum). The first file to supply a value wins; later files only fill
+        /// blanks. An employee marked as left (N) in any file stays left.
+        /// </summary>
+        public static List<Employee> MergeEmployees(IEnumerable<List<Employee>> sourcesInPriorityOrder)
+        {
+            var map = new Dictionary<string, Employee>();
+
+            foreach (var source in sourcesInPriorityOrder)
+            {
+                foreach (var e in source)
+                {
+                    if (!map.TryGetValue(e.EmpCode, out var cur))
+                    {
+                        map[e.EmpCode] = e;
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(cur.FullName)) cur.FullName = e.FullName;
+                    if (string.IsNullOrWhiteSpace(cur.CardNo)) cur.CardNo = e.CardNo;
+                    if (string.IsNullOrWhiteSpace(cur.Department)) cur.Department = e.Department;
+                    if (string.IsNullOrWhiteSpace(cur.Designation)) cur.Designation = e.Designation;
+                    if (string.IsNullOrWhiteSpace(cur.Category)) cur.Category = e.Category;
+                    if (string.IsNullOrWhiteSpace(cur.Shift)) cur.Shift = e.Shift;
+                    if (cur.BasicSalary <= 0) cur.BasicSalary = e.BasicSalary;
+                    if (string.IsNullOrWhiteSpace(cur.WageType)) cur.WageType = e.WageType;
+
+                    if (cur.Status == "N" || e.Status == "N") cur.Status = "N";
+                    else if (string.IsNullOrEmpty(cur.Status)) cur.Status = e.Status;
+                }
+            }
+
+            return map.Values.OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
         }
 
         /// <summary>

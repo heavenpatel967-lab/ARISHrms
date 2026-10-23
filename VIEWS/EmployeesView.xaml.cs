@@ -165,8 +165,8 @@ namespace ARISHrms.Views
                 }
                 else if (imported > 0)
                 {
-                    sb.AppendLine($"Employee file: {scan.EmployeeMasterFile.FileName}");
-                    sb.AppendLine($"Employees imported / updated: {imported}");
+                    sb.AppendLine($"Files used: {string.Join(" > ", scan.SourceFiles.Select(f => f.FileName))}");
+                    sb.AppendLine($"Employees imported / updated: {imported}  (active {scan.ActiveCount}, left {scan.LeftCount})");
                 }
                 else
                 {
