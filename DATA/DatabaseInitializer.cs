@@ -28,8 +28,14 @@ namespace ARISHrms.Data
                         Status TEXT DEFAULT 'Y',
                         Phone TEXT,
                         AadharNo TEXT,
-                        NativeVillage TEXT
+                        NativeVillage TEXT,
+                        BasicSalary REAL NOT NULL DEFAULT 0,
+                        WageType TEXT
                     );");
+
+                // Upgrade databases created before these columns existed
+                EnsureColumn(connection, "Employees", "BasicSalary", "REAL NOT NULL DEFAULT 0");
+                EnsureColumn(connection, "Employees", "WageType", "TEXT");
 
                 // 2. Attendance & Punches (8-Punch Architecture)
                 connection.Execute(@"
@@ -199,6 +205,25 @@ namespace ARISHrms.Data
                         ChangedDate DATETIME DEFAULT CURRENT_TIMESTAMP
                     );");
             }
+        }
+
+        private static void EnsureColumn(SqliteConnection connection, string table, string column, string definition)
+        {
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"PRAGMA table_info({table})";
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        // column 1 of PRAGMA table_info is the column name
+                        if (string.Equals(reader.GetString(1), column, System.StringComparison.OrdinalIgnoreCase))
+                            return;
+                    }
+                }
+            }
+
+            connection.Execute($"ALTER TABLE {table} ADD COLUMN {column} {definition}");
         }
     }
 }

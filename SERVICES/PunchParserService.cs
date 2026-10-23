@@ -65,25 +65,7 @@ namespace ARISHrms.Services
                     "\nExpected a column for the employee code (e.g. EMPCODE / ECODE / EMPNO).");
             }
 
-            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    // Upsert: update only the fields that come from the DBF, so details entered
-                    // inside this app (Designation, Phone, Aadhar, Village, Status) are never wiped.
-                    string sql = @"INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift)
-                                   VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift)
-                                   ON CONFLICT(EmpCode) DO UPDATE SET
-                                       CardNo = CASE WHEN excluded.CardNo <> '' THEN excluded.CardNo ELSE Employees.CardNo END,
-                                       FullName = CASE WHEN excluded.FullName <> '' THEN excluded.FullName ELSE Employees.FullName END,
-                                       Department = CASE WHEN excluded.Department <> '' THEN excluded.Department ELSE Employees.Department END,
-                                       Category = CASE WHEN excluded.Category <> '' THEN excluded.Category ELSE Employees.Category END,
-                                       Shift = CASE WHEN excluded.Shift <> '' THEN excluded.Shift ELSE Employees.Shift END;";
-                    connection.Execute(sql, employees, transaction);
-                    transaction.Commit();
-                }
-            }
+            DbfFolderScanner.UpsertEmployees(employees);
 
             return employees.Count;
         }

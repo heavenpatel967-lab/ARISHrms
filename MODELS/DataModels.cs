@@ -12,8 +12,11 @@ namespace ARISHrms.Models
         public string Designation { get; set; }
         public string Status { get; set; }
 
-        // Add this line:
         public string Shift { get; set; }
+
+        // From the payroll DBF (monsum.dbf: BASIC / WAGE_TYPE)
+        public decimal BasicSalary { get; set; }
+        public string WageType { get; set; }
     }
 
     public class RawPunch

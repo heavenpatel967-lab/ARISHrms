@@ -26,11 +26,16 @@ namespace ARISHrms.Services
     /// <summary>Which DBF column feeds which employee property (null = not present in the file).</summary>
     public class EmployeeColumns
     {
-        public string Code, Card, Name, Dept, Category, Shift;
+        public string Code, Card, Name, Dept, Category, Shift, Designation, Basic, WageType, YearMonth;
 
-        /// <summary>How many of the useful columns were found (code + name are the minimum for an employee master).</summary>
-        public int Score => new[] { Code, Card, Name, Dept, Category, Shift }.Count(c => c != null);
-        public bool IsEmployeeMaster => Code != null && Name != null;
+        /// <summary>How many of the useful columns were found.</summary>
+        public int Score => new[] { Code, Card, Name, Dept, Category, Shift, Designation, Basic }.Count(c => c != null);
+
+        /// <summary>
+        /// A usable employee master has an employee code plus at least one more employee attribute.
+        /// A name column is NOT required: payroll summary files (e.g. monsum.dbf) have no names.
+        /// </summary>
+        public bool IsEmployeeMaster => Code != null && Score >= 2;
     }
 
     /// <summary>
@@ -133,42 +138,98 @@ namespace ARISHrms.Services
         /// <summary>Find which columns of a DBF correspond to employee-master fields.</summary>
         public static EmployeeColumns MapEmployeeColumns(DbfTable table) => new EmployeeColumns
         {
-            Code = FindColumn(table, "EMPCODE", "EMP_CODE", "ECODE", "EMPNO", "EMP_NO", "EMPID", "EMP_ID",
-                              "EMPLOYEEID", "EMPLOYEECODE", "PERNO", "CODE", "ID"),
-            Card = FindColumn(table, "CARDNO", "CARD_NO", "CARD", "CARDNUM", "CARDNUMBER"),
-            Name = FindColumn(table, "NAME", "EMPNAME", "EMP_NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE"),
-            Dept = FindColumn(table, "DEPT", "DEPARTMENT", "DEPTCODE", "DEPT_CODE", "DEPTNAME"),
-            Category = FindColumn(table, "CAT", "CATEGORY", "CATCODE", "CAT_CODE"),
-            Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE", "SHIFT_CODE")
+            // EMP_CODE is checked before EMPCD (monsum.dbf has both)
+            Code = FindColumn(table, "EMPCODE", "EMPCD", "ECODE", "EMPNO", "EMPID", "EMPLOYEEID",
+                              "EMPLOYEECODE", "PERNO", "CODE", "ID"),
+            Card = FindColumn(table, "CARDNO", "CARD", "CARDNUM", "CARDNUMBER"),
+            Name = FindColumn(table, "NAME", "EMPNAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
+            Dept = FindColumn(table, "DEPT", "DEPARTMENT", "DEPTCODE", "DEPTNAME"),
+            Category = FindColumn(table, "CAT", "CATEGORY", "CATCODE"),
+            Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE"),
+            Designation = FindColumn(table, "DESIG", "DESIGNATION", "DESIGCODE"),
+            Basic = FindColumn(table, "BASIC", "BASICSALARY", "BASICPAY"),
+            WageType = FindColumn(table, "WAGETYPE", "WAGETYP"),
+            YearMonth = FindColumn(table, "YRMONTH", "YEARMONTH", "PAYMONTH")
         };
 
-        /// <summary>Build employees from an already-loaded table.</summary>
+        /// <summary>Turns a YRMONTH-style value (202607, 2026-07, 07/2026, 072026) into a sortable number, or null.</summary>
+        private static int? MonthKey(string raw)
+        {
+            string d = Regex.Replace(raw ?? "", @"\D", "");
+            if (d.Length != 6) return null;
+            int first4 = int.Parse(d.Substring(0, 4)), last4 = int.Parse(d.Substring(2, 4));
+            if (first4 is >= 1990 and <= 2100 && int.Parse(d.Substring(4, 2)) is >= 1 and <= 12)
+                return first4 * 100 + int.Parse(d.Substring(4, 2));              // yyyyMM
+            if (last4 is >= 1990 and <= 2100 && int.Parse(d.Substring(0, 2)) is >= 1 and <= 12)
+                return last4 * 100 + int.Parse(d.Substring(0, 2));               // MMyyyy
+            return null;
+        }
+
+        private static decimal ParseDecimal(string raw) =>
+            decimal.TryParse((raw ?? "").Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+        /// <summary>
+        /// Build employees from an already-loaded table. When the file has several rows per employee
+        /// (one per month), the latest month wins; if months can't be read, the last row in the file wins.
+        /// </summary>
         public static List<Employee> ReadEmployees(DbfTable table)
         {
-            var result = new List<Employee>();
             var cols = MapEmployeeColumns(table);
-            if (cols.Code == null) return result;
+            if (cols.Code == null) return new List<Employee>();
 
             string Get(Dictionary<string, string> row, string col) =>
                 col != null && row.TryGetValue(col, out var v) ? (v ?? "").Trim() : "";
 
+            var latest = new Dictionary<string, (long order, Employee emp)>();
+            long rowIndex = 0;
+
             foreach (var row in table.Rows)
             {
+                rowIndex++;
                 string code = NormalizeEmpCode(Get(row, cols.Code));
                 if (string.IsNullOrEmpty(code)) continue;
 
-                result.Add(new Employee
+                // order = month (if readable) * 1e9 + row index, so a later month always beats an earlier one
+                long month = MonthKey(Get(row, cols.YearMonth)) ?? 0;
+                long order = month * 1_000_000_000L + rowIndex;
+
+                if (latest.TryGetValue(code, out var existing) && existing.order > order)
+                    continue;
+
+                latest[code] = (order, new Employee
                 {
                     EmpCode = code,
                     CardNo = Get(row, cols.Card),
                     FullName = Get(row, cols.Name),
                     Department = Get(row, cols.Dept),
                     Category = Get(row, cols.Category),
-                    Shift = Get(row, cols.Shift)
+                    Shift = Get(row, cols.Shift),
+                    Designation = Get(row, cols.Designation),
+                    BasicSalary = ParseDecimal(Get(row, cols.Basic)),
+                    WageType = Get(row, cols.WageType)
                 });
             }
 
-            return result;
+            return latest.Values.Select(v => v.emp).OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// Map employee code -> name from a table that has both columns (used to fill in names
+        /// when the main file, e.g. monsum.dbf, has none).
+        /// </summary>
+        public static Dictionary<string, string> ReadNames(DbfTable table)
+        {
+            var names = new Dictionary<string, string>();
+            var cols = MapEmployeeColumns(table);
+            if (cols.Code == null || cols.Name == null) return names;
+
+            foreach (var row in table.Rows)
+            {
+                string code = NormalizeEmpCode(row.TryGetValue(cols.Code, out var c) ? c : "");
+                string name = row.TryGetValue(cols.Name, out var n) ? (n ?? "").Trim() : "";
+                if (code.Length > 0 && name.Length > 0) names[code] = name;
+            }
+            return names;
         }
 
         /// <summary>

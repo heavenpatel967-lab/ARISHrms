@@ -174,6 +174,12 @@ namespace ARISHrms.Views
                     sb.AppendLine("so nothing was imported.");
                 }
 
+                if (!string.IsNullOrEmpty(scan.MappingSummary))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine(scan.MappingSummary);
+                }
+
                 sb.AppendLine();
                 sb.AppendLine($"A detailed report listing every file and its columns was saved to:");
                 sb.AppendLine(report);
