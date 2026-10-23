@@ -67,41 +67,136 @@ namespace ARISHrms.Data
                         UNIQUE(RuleType, EmpCode)
                     );");
 
-                // 4. Financials: Loans & Advances
+                // 4. Financials: Loans
                 connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS LoanMasters (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        LoanDate DATE NOT NULL,
+                        LoanAmount REAL NOT NULL,
+                        TenureMonths INTEGER NOT NULL,
+                        InterestRate REAL DEFAULT 0,
+                        MonthlyEMI REAL NOT NULL,
+                        Status TEXT DEFAULT 'Active',
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode)
+                    );
+                    
                     CREATE TABLE IF NOT EXISTS LoanLedgers (
                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        EmpCode TEXT,
-                        MonthYear TEXT,
-                        PendingLoanAmount REAL,
-                        EmiDeducted REAL
-                    );
-                    CREATE TABLE IF NOT EXISTS AdvanceLedgers (
-                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        EmpCode TEXT,
-                        MonthYear TEXT,
-                        AdvanceAmount REAL,
-                        IsOverLimit INTEGER DEFAULT 0
+                        LoanId INTEGER NOT NULL,
+                        EmpCode TEXT NOT NULL,
+                        MonthYear TEXT NOT NULL,
+                        MonthlyEMI REAL NOT NULL,
+                        EmiDeducted REAL DEFAULT 0,
+                        OutstandingBalance REAL NOT NULL,
+                        IsInArrears INTEGER DEFAULT 0,
+                        UNIQUE(LoanId, MonthYear),
+                        FOREIGN KEY (LoanId) REFERENCES LoanMasters(Id),
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode)
                     );");
 
-                // 5. Leaves / Village Visits & Documents
+                // 5. Financials: Advances
                 connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS AdvanceLedgers (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        MonthYear TEXT NOT NULL,
+                        AdvanceAmount REAL NOT NULL,
+                        AdvanceDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        RecoveryAmount REAL DEFAULT 0,
+                        IsRecovered INTEGER DEFAULT 0,
+                        IsOverLimit INTEGER DEFAULT 0,
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode)
+                    );");
+
+                // 6. Leaves & Village Visits
+                connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS LeaveTypes (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        LeaveCode TEXT UNIQUE NOT NULL,
+                        LeaveName TEXT NOT NULL,
+                        MaxDaysPerYear INTEGER
+                    );
+                    
                     CREATE TABLE IF NOT EXISTS VillageVisits (
                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        EmpCode TEXT,
-                        DepartureDate DATE,
-                        ExpectedReturn DATE,
+                        EmpCode TEXT NOT NULL,
+                        LeaveTypeId INTEGER,
+                        DepartureDate DATE NOT NULL,
+                        ExpectedReturn DATE NOT NULL,
                         ActualReturn DATE,
                         LateDays INTEGER DEFAULT 0,
-                        ReasonNotes TEXT
+                        LatePenalty REAL DEFAULT 0,
+                        ReasonNotes TEXT,
+                        ApprovedBy TEXT,
+                        Status TEXT DEFAULT 'Approved',
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode),
+                        FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id)
                     );
+                    
+                    CREATE TABLE IF NOT EXISTS LeaveBalance (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        Year INTEGER NOT NULL,
+                        LeaveTypeId INTEGER,
+                        BalanceAtStart INTEGER NOT NULL,
+                        TakenDays INTEGER DEFAULT 0,
+                        RemainingBalance INTEGER NOT NULL,
+                        CarryOverDays INTEGER DEFAULT 0,
+                        LastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(EmpCode, Year, LeaveTypeId),
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode),
+                        FOREIGN KEY (LeaveTypeId) REFERENCES LeaveTypes(Id)
+                    );");
+
+                // 7. Documents
+                connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS EmployeeDocuments (
                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        EmpCode TEXT,
-                        DocCategory TEXT,
-                        DocName TEXT,
+                        EmpCode TEXT NOT NULL,
+                        DocCategory TEXT NOT NULL,
+                        DocName TEXT NOT NULL,
                         FilePath TEXT,
-                        UploadDate DATETIME DEFAULT CURRENT_TIMESTAMP
+                        FileSize INTEGER,
+                        UploadDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        ExpiryDate DATE,
+                        IsExpired INTEGER DEFAULT 0,
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode)
+                    );");
+
+                // 8. Payroll - Salary Slips
+                connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS SalarySlips (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        MonthYear TEXT NOT NULL,
+                        BasicSalary REAL NOT NULL,
+                        Dearness REAL DEFAULT 0,
+                        OtherAllowances REAL DEFAULT 0,
+                        Gross REAL NOT NULL,
+                        LoanEMI REAL DEFAULT 0,
+                        AdvanceRecovery REAL DEFAULT 0,
+                        LatePenalty REAL DEFAULT 0,
+                        PF REAL DEFAULT 0,
+                        TaxDeduction REAL DEFAULT 0,
+                        TotalDeduction REAL NOT NULL,
+                        NetSalary REAL NOT NULL,
+                        GeneratedDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(EmpCode, MonthYear),
+                        FOREIGN KEY (EmpCode) REFERENCES Employees(EmpCode)
+                    );");
+
+                // 9. Audit Trail
+                connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS AuditLog (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EntityType TEXT NOT NULL,
+                        EntityId TEXT NOT NULL,
+                        ChangeType TEXT NOT NULL,
+                        OldValue TEXT,
+                        NewValue TEXT,
+                        ChangedBy TEXT,
+                        ChangedDate DATETIME DEFAULT CURRENT_TIMESTAMP
                     );");
             }
         }

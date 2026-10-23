@@ -11,7 +11,7 @@ namespace ARISHrms
         {
             InitializeComponent();
             DatabaseInitializer.Initialize();
-            LoadView("Attendance");
+            LoadView("Dashboard");
         }
 
         private void Nav_Click(object sender, RoutedEventArgs e)
@@ -26,13 +26,17 @@ namespace ARISHrms
         {
             switch (viewKey)
             {
+                case "Dashboard":
+                    TxtCurrentViewTitle.Text = "Dashboard & KPIs";
+                    MainContentHost.Content = new DashboardView();
+                    break;
                 case "Attendance":
                     TxtCurrentViewTitle.Text = "Attendance & Punch Management";
                     MainContentHost.Content = new AttendanceView();
                     break;
                 case "Employees":
                     TxtCurrentViewTitle.Text = "Employee Master Directory";
-                    MainContentHost.Content = new EmployeesView(); // <-- Make sure this is uncommented!
+                    MainContentHost.Content = new EmployeesView();
                     break;
                 case "Loans":
                     TxtCurrentViewTitle.Text = "Loan Ledger & Repayment Health";
@@ -49,6 +53,10 @@ namespace ARISHrms
                 case "Documents":
                     TxtCurrentViewTitle.Text = "Employee Document Repository";
                     MainContentHost.Content = new DocumentsView();
+                    break;
+                case "Payroll":
+                    TxtCurrentViewTitle.Text = "Salary Slips & Payroll";
+                    MainContentHost.Content = new PayrollView();
                     break;
             }
         }
