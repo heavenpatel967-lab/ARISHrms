@@ -46,7 +46,7 @@ namespace ARISHrms.Services
             }
         }
 
-        public static void ParseEmployeesFromDbf(string filePath)
+        public static int ParseEmployeesFromDbf(string filePath)
         {
             var employees = new List<Employee>();
             string fileContent = File.ReadAllText(filePath);
@@ -74,15 +74,30 @@ namespace ARISHrms.Services
                 });
             }
 
+            if (employees.Count == 0)
+                return 0;
+
             using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
             {
                 connection.Open();
-                // INSERT OR REPLACE gracefully handles updates for existing employees and adds new ones
-                string sql = @"INSERT OR REPLACE INTO Employees 
-                             (EmpCode, CardNo, FullName, Department, Category, Shift) 
-                             VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift);";
-                connection.Execute(sql, employees);
+                using (var transaction = connection.BeginTransaction())
+                {
+                    // Upsert: update only the fields that come from the DBF, so details entered
+                    // inside this app (Designation, Phone, Aadhar, Village, Status) are never wiped.
+                    string sql = @"INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift)
+                                   VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift)
+                                   ON CONFLICT(EmpCode) DO UPDATE SET
+                                       CardNo = excluded.CardNo,
+                                       FullName = excluded.FullName,
+                                       Department = excluded.Department,
+                                       Category = excluded.Category,
+                                       Shift = excluded.Shift;";
+                    connection.Execute(sql, employees, transaction);
+                    transaction.Commit();
+                }
             }
+
+            return employees.Count;
         }
     }
 }

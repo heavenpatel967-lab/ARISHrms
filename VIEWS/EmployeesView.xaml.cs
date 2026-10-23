@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Dapper;
 using ARISHrms.Data;
 using ARISHrms.Models;
+using ARISHrms.Services;
 using Microsoft.Win32;
 
 namespace ARISHrms.Views
@@ -140,71 +141,17 @@ namespace ARISHrms.Views
             {
                 try
                 {
-                    SyncDbfData(openFileDialog.FileName);
+                    int count = PunchParserService.ParseEmployeesFromDbf(openFileDialog.FileName);
                     LoadEmployees(); // Instantly refresh the UI grid
-                    MessageBox.Show("Employee data synced successfully from DBF!", "Sync Complete");
+
+                    if (count == 0)
+                        MessageBox.Show("No employee records were found in this file.\n\nMake sure you selected the employee master .dbf.", "Nothing Imported", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    else
+                        MessageBox.Show($"{count} employee record(s) synced from DBF.", "Sync Complete");
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error syncing DBF: {ex.Message}\n\nMake sure the file isn't open in Excel.", "Sync Error");
-                }
-            }
-        }
-
-        private void SyncDbfData(string dbfFilePath)
-        {
-            string directory = System.IO.Path.GetDirectoryName(dbfFilePath);
-            string fileName = System.IO.Path.GetFileName(dbfFilePath);
-
-            // Standard OleDb connection string for DBF files
-            string oleDbConnectionString = $@"Provider=Microsoft.Jet.OLEDB.4.0;Data Source={directory};Extended Properties=dBase IV;";
-
-            var employeesToSync = new List<Employee>();
-
-            // 1. Read the DBF File
-            using (var oleConnection = new System.Data.OleDb.OleDbConnection(oleDbConnectionString))
-            {
-                oleConnection.Open();
-                var command = new System.Data.OleDb.OleDbCommand($"SELECT * FROM [{fileName}]", oleConnection);
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        employeesToSync.Add(new Employee
-                        {
-                            EmpCode = reader["EmpCode"]?.ToString(),
-                            CardNo = reader["CardNo"]?.ToString(),
-                            FullName = reader["Name"]?.ToString(),
-                            Department = reader["Department"]?.ToString(),
-                            Category = reader["Category"]?.ToString(),
-                            Designation = reader["Designation"]?.ToString(),
-                            Status = reader["Status"]?.ToString() ?? "Y",
-                            Shift = reader["Shift"]?.ToString()
-                        });
-                    }
-                }
-            }
-
-            // 2. Upsert into SQLite using Dapper
-            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    string sql = @"
-                        INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Designation, Status, Shift)
-                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Designation, @Status, @Shift)
-                        ON CONFLICT(EmpCode) DO UPDATE SET
-                            CardNo = excluded.CardNo,
-                            FullName = excluded.FullName,
-                            Department = excluded.Department,
-                            Category = excluded.Category,
-                            Designation = excluded.Designation,
-                            Status = excluded.Status,
-                            Shift = excluded.Shift;";
-
-                    connection.Execute(sql, employeesToSync, transaction);
-                    transaction.Commit();
+                    MessageBox.Show($"Error syncing DBF: {ex.Message}", "Sync Error");
                 }
             }
         }

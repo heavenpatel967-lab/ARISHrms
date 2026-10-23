@@ -46,9 +46,8 @@ namespace ARISHrms.Views
 
                 try
                 {
-                    // UNCOMMENT ONCE SERVICES ARE COPIED:
-                    // foreach (string filename in openFileDialog.FileNames) { PunchParserService.ParseAndSaveFile(filename); }
-                    // AttendanceProcessorService.ProcessRawPunches();
+                    foreach (string filename in openFileDialog.FileNames) { PunchParserService.ParseAndSaveFile(filename); }
+                    AttendanceProcessorService.ProcessRawPunches();
 
                     MessageBox.Show("Punches imported and processed successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadExceptions();
@@ -64,10 +63,12 @@ namespace ARISHrms.Views
             {
                 try
                 {
-                    // UNCOMMENT ONCE SERVICES ARE COPIED:
-                    // PunchParserService.ParseEmployeesFromDbf(openFileDialog.FileName);
+                    int count = PunchParserService.ParseEmployeesFromDbf(openFileDialog.FileName);
 
-                    MessageBox.Show("Employee Master Data updated successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    if (count == 0)
+                        MessageBox.Show("No employee records were found in this file.", "Nothing Imported", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    else
+                        MessageBox.Show($"Employee Master updated: {count} record(s).", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadExceptions();
                 }
                 catch (Exception ex) { MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error); }
