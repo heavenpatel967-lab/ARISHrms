@@ -26,16 +26,19 @@ namespace ARISHrms.Services
     /// <summary>Which DBF column feeds which employee property (null = not present in the file).</summary>
     public class EmployeeColumns
     {
+        public bool CodeIsStrong;
         public string Code, Card, CompCode, Name, Dept, Category, Shift, Designation, Basic, WageType, YearMonth, LeavingDate;
 
         /// <summary>How many of the useful columns were found.</summary>
         public int Score => new[] { Code, Card, Name, Dept, Category, Shift, Designation, Basic }.Count(c => c != null);
 
         /// <summary>
-        /// A usable employee master has an employee code plus at least one more employee attribute.
+        /// A usable employee master has a clearly-named employee code column (EMPCD, EMPCODE, ECODE, EMPNO...)
+        /// plus at least one more employee attribute. A bare ID/CODE column is not enough: system files
+        /// such as FoxPro's FOXUSER.DBF also have ID and NAME columns.
         /// A name column is NOT required: payroll summary files (e.g. monsum.dbf) have no names.
         /// </summary>
-        public bool IsEmployeeMaster => Code != null && Score >= 2;
+        public bool IsEmployeeMaster => CodeIsStrong && Score >= 2;
     }
 
     /// <summary>
@@ -136,12 +139,16 @@ namespace ARISHrms.Services
         }
 
         /// <summary>Find which columns of a DBF correspond to employee-master fields.</summary>
-        public static EmployeeColumns MapEmployeeColumns(DbfTable table) => new EmployeeColumns
+        public static EmployeeColumns MapEmployeeColumns(DbfTable table)
         {
+            string strongCode = FindColumn(table, "EMPCD", "EMPCODE", "ECODE", "EMPNO", "EMPID", "EMPLOYEEID",
+                                           "EMPLOYEECODE", "PERNO");
+            return new EmployeeColumns
+            {
             // Same names the old ARIS Payroll Companion used: EMPCD (code), CARDNO / COMP_CODE (card),
             // EMPNM (name), DEPT, DESIG, CAT, LEAVING_DT. Other common spellings are accepted as fallbacks.
-            Code = FindColumn(table, "EMPCD", "EMPCODE", "ECODE", "EMPNO", "EMPID", "EMPLOYEEID",
-                              "EMPLOYEECODE", "PERNO", "CODE", "ID"),
+            CodeIsStrong = strongCode != null,
+            Code = strongCode ?? FindColumn(table, "CODE", "ID"),
             Card = FindColumn(table, "CARDNO", "CARD", "CARDNUM", "CARDNUMBER"),
             CompCode = FindColumn(table, "COMPCODE"),
             Name = FindColumn(table, "EMPNM", "EMPNAME", "NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
@@ -153,7 +160,19 @@ namespace ARISHrms.Services
             WageType = FindColumn(table, "WAGETYPE", "WAGETYP"),
             YearMonth = FindColumn(table, "YRMONTH", "YEARMONTH", "PAYMONTH"),
             LeavingDate = FindColumn(table, "LEAVINGDT", "LEAVINGDATE", "LEAVEDT")
-        };
+            };
+        }
+
+        /// <summary>FoxPro keeps window layouts and preferences in FOXUSER.DBF / FOXCODE.DBF - never employee data.</summary>
+        public static bool IsFoxProSystemFile(string path, DbfTable table)
+        {
+            string name = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+            if (name.StartsWith("foxuser") || name.StartsWith("foxcode") || name.StartsWith("foxhelp")) return true;
+
+            // FoxPro resource-file layout: TYPE, ID, NAME, READONLY, CKVAL, DATA, UPDATED
+            bool Has(string col) => table.Fields.Any(f => string.Equals(f.Name, col, StringComparison.OrdinalIgnoreCase));
+            return Has("CKVAL") && Has("READONLY") && Has("TYPE");
+        }
 
         /// <summary>Turns a YRMONTH-style value (202607, 2026-07, 07/2026, 072026) into a sortable number, or null.</summary>
         private static int? MonthKey(string raw)

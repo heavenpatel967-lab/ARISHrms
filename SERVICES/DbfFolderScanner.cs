@@ -130,6 +130,13 @@ namespace ARISHrms.Services
                     info.RecordCount = peek.RecordCount;
                     info.Columns = peek.Fields;
 
+                    if (DbfReader.IsFoxProSystemFile(path, peek))
+                    {
+                        info.Kind = "FoxPro system file (ignored)";
+                        info.Priority = 0;
+                        continue;
+                    }
+
                     var cols = DbfReader.MapEmployeeColumns(peek);
                     info.MappedColumns = cols.Score;
 
@@ -181,21 +188,28 @@ namespace ARISHrms.Services
             return result;
         }
 
-        /// <summary>Import employees from the recognized employee file(s).</summary>
+        /// <summary>Import employees from the recognized employee file(s) (add/update only).</summary>
         public static int ImportEmployees(DbfScanResult scan)
         {
+            var merged = BuildEmployees(scan);
+            if (merged.Count == 0) return 0;
+            SaveEmployees(scan, merged, removeStale: false, out _, out _);
+            return merged.Count;
+        }
+
+        /// <summary>Read and merge the employee files WITHOUT touching the database.</summary>
+        public static List<Employee> BuildEmployees(DbfScanResult scan)
+        {
             if (scan.SourceFiles.Count == 0)
-                return 0;
+                return new List<Employee>();
 
             var perFile = new List<List<Employee>>();
             var mappings = new StringBuilder();
-            EmployeeColumns firstCols = null;
 
             foreach (var file in scan.SourceFiles)
             {
                 var table = DbfReader.Read(file.FullPath);
                 var cols = DbfReader.MapEmployeeColumns(table);
-                firstCols ??= cols;
 
                 var employees = DbfReader.ReadEmployees(table);
                 perFile.Add(employees);
@@ -204,24 +218,81 @@ namespace ARISHrms.Services
 
             var merged = DbfReader.MergeEmployees(perFile);
             if (merged.Count == 0)
-                return 0;
+                return merged;
 
             // Last resort: none of the files had names (e.g. only monsum was found) - look in other DBFs
             if (merged.Any(e => string.IsNullOrEmpty(e.FullName)))
                 FillNamesFromOtherFiles(scan, merged, mappings);
-
-            UpsertEmployees(merged);
 
             scan.EmployeesImported = merged.Count;
             scan.ActiveCount = merged.Count(e => e.Status != "N");
             scan.LeftCount = merged.Count(e => e.Status == "N");
 
             mappings.AppendLine();
-            mappings.AppendLine("First 5 employees imported:");
+            mappings.AppendLine("First 5 employees:");
             foreach (var e in merged.Take(5))
                 mappings.AppendLine($"  {e.EmpCode} | {e.FullName} | card {e.CardNo} | dept {e.Department} | cat {e.Category} | desig {e.Designation} | basic {e.BasicSalary:0.##} | wage {e.WageType} | status {(string.IsNullOrEmpty(e.Status) ? "-" : e.Status)}");
             scan.MappingSummary = mappings.ToString();
-            return merged.Count;
+            return merged;
+        }
+
+        /// <summary>Employee codes already stored in the app that are NOT in this sync (candidates to remove).</summary>
+        public static List<string> FindStaleEmployeeCodes(List<Employee> merged)
+        {
+            var incoming = new HashSet<string>(merged.Select(e => e.EmpCode));
+            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
+            {
+                connection.Open();
+                return connection.Query<string>("SELECT EmpCode FROM Employees ORDER BY EmpCode")
+                                 .Where(c => !incoming.Contains(c)).ToList();
+            }
+        }
+
+        /// <summary>
+        /// Save the merged employees. With removeStale, employees that are no longer in the files are deleted -
+        /// unless they have loans, advances, village visits, documents or payslips, which are always kept.
+        /// </summary>
+        public static void SaveEmployees(DbfScanResult scan, List<Employee> merged, bool removeStale,
+                                         out int removed, out int keptBecauseInUse)
+        {
+            removed = 0;
+            keptBecauseInUse = 0;
+
+            var stale = removeStale ? FindStaleEmployeeCodes(merged) : new List<string>();
+
+            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    UpsertEmployees(connection, merged, transaction);
+
+                    foreach (var code in stale)
+                    {
+                        int deleted = connection.Execute(@"
+                            DELETE FROM Employees
+                            WHERE EmpCode = @code
+                              AND NOT EXISTS (SELECT 1 FROM LoanMasters WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM AdvanceLedgers WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM VillageVisits WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM SalarySlips WHERE EmpCode = @code);",
+                            new { code }, transaction);
+
+                        if (deleted > 0)
+                        {
+                            // balances are created automatically when the Leaves screen opens - nothing worth keeping
+                            connection.Execute("DELETE FROM LeaveBalance WHERE EmpCode = @code;", new { code }, transaction);
+                            removed++;
+                        }
+                        else keptBecauseInUse++;
+                    }
+
+                    transaction.Commit();
+                }
+            }
+
+            scan.EmployeesImported = merged.Count;
         }
 
         private static string DescribeMapping(string file, EmployeeColumns c, int count)
@@ -273,7 +344,15 @@ namespace ARISHrms.Services
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
-                    connection.Execute(@"
+                    UpsertEmployees(connection, employees, transaction);
+                    transaction.Commit();
+                }
+            }
+        }
+
+        private static void UpsertEmployees(SqliteConnection connection, List<Employee> employees, SqliteTransaction transaction)
+        {
+            connection.Execute(@"
                         INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType, Status)
                         VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, COALESCE(NULLIF(@Shift, ''), 'B'), @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'))
                         ON CONFLICT(EmpCode) DO UPDATE SET
@@ -287,9 +366,6 @@ namespace ARISHrms.Services
                             WageType = CASE WHEN excluded.WageType <> '' THEN excluded.WageType ELSE Employees.WageType END,
                             Status = CASE WHEN @Status <> '' THEN @Status ELSE Employees.Status END;",
                         employees, transaction);
-                    transaction.Commit();
-                }
-            }
         }
 
         /// <summary>Save the scan report next to the app so it can be reviewed or shared.</summary>

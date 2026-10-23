@@ -146,11 +146,47 @@ namespace ARISHrms.Views
             {
                 Mouse.OverrideCursor = Cursors.Wait;
 
+                // 1) Read and merge the files - nothing is saved yet
                 var scan = DbfFolderScanner.Scan(folder);
-                int imported = DbfFolderScanner.ImportEmployees(scan);
-                string report = DbfFolderScanner.SaveReport(scan);
+                var employees = DbfFolderScanner.BuildEmployees(scan);
                 DbfFolderScanner.SaveLastFolder(folder);
 
+                int removed = 0, kept = 0;
+                bool saved = false;
+
+                if (employees.Count > 0)
+                {
+                    // 2) Employees already in the app that are not in these files (old test data, wrong files...)
+                    var stale = DbfFolderScanner.FindStaleEmployeeCodes(employees);
+                    bool removeStale = false;
+
+                    if (stale.Count > 0)
+                    {
+                        Mouse.OverrideCursor = null;
+                        string sample = string.Join(", ", stale.Take(8)) + (stale.Count > 8 ? ", ..." : "");
+                        var answer = MessageBox.Show(
+                            $"The files contain {employees.Count} employee(s).\n\n" +
+                            $"{stale.Count} employee(s) already in this app are NOT in these files:\n{sample}\n\n" +
+                            "YES = remove them (like the old Payroll Companion, which replaced its list on every sync)\n" +
+                            "NO = keep them and only add/update\n" +
+                            "CANCEL = stop, change nothing\n\n" +
+                            "Employees that have loans, advances, leaves, documents or payslips are always kept.",
+                            "Remove employees that are not in the files?",
+                            MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                        if (answer == MessageBoxResult.Cancel)
+                            return;
+
+                        removeStale = answer == MessageBoxResult.Yes;
+                        Mouse.OverrideCursor = Cursors.Wait;
+                    }
+
+                    // 3) Save
+                    DbfFolderScanner.SaveEmployees(scan, employees, removeStale, out removed, out kept);
+                    saved = true;
+                }
+
+                string report = DbfFolderScanner.SaveReport(scan);
                 LoadEmployees();
                 Mouse.OverrideCursor = null;
 
@@ -163,14 +199,16 @@ namespace ARISHrms.Views
                 {
                     sb.AppendLine("No .dbf files were found in this folder or its subfolders.");
                 }
-                else if (imported > 0)
+                else if (saved)
                 {
                     sb.AppendLine($"Files used: {string.Join(" > ", scan.SourceFiles.Select(f => f.FileName))}");
-                    sb.AppendLine($"Employees imported / updated: {imported}  (active {scan.ActiveCount}, left {scan.LeftCount})");
+                    sb.AppendLine($"Employees imported / updated: {employees.Count}  (active {scan.ActiveCount}, left {scan.LeftCount})");
+                    if (removed > 0) sb.AppendLine($"Removed from the app: {removed}");
+                    if (kept > 0) sb.AppendLine($"Kept because they have loans/advances/leaves/documents/payslips: {kept}");
                 }
                 else
                 {
-                    sb.AppendLine("No file in this folder looks like an employee master,");
+                    sb.AppendLine("No file in this folder looks like an employee file,");
                     sb.AppendLine("so nothing was imported.");
                 }
 
@@ -181,11 +219,11 @@ namespace ARISHrms.Views
                 }
 
                 sb.AppendLine();
-                sb.AppendLine($"A detailed report listing every file and its columns was saved to:");
+                sb.AppendLine("A detailed report listing every file and its columns was saved to:");
                 sb.AppendLine(report);
 
-                MessageBox.Show(sb.ToString(), imported > 0 ? "Folder Sync Complete" : "Folder Scanned",
-                    MessageBoxButton.OK, imported > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                MessageBox.Show(sb.ToString(), saved ? "Folder Sync Complete" : "Folder Scanned",
+                    MessageBoxButton.OK, saved ? MessageBoxImage.Information : MessageBoxImage.Warning);
             }
             catch (Exception ex)
             {
