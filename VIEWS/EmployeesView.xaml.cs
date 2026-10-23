@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Data.Sqlite;
 using Dapper;
 using ARISHrms.Data;
@@ -126,6 +127,64 @@ namespace ARISHrms.Views
             if (EmployeeGrid.SelectedItem is Employee selectedEmp)
             {
                 MessageBox.Show($"Opening 360° Profile for {selectedEmp.FullName} (Code: {selectedEmp.EmpCode})", "Profile View");
+            }
+        }
+
+        private void BtnSyncFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var folderDialog = new OpenFolderDialog { Title = "Select the folder that contains your .dbf files" };
+            string last = DbfFolderScanner.GetLastFolder();
+            if (!string.IsNullOrWhiteSpace(last) && System.IO.Directory.Exists(last))
+                folderDialog.InitialDirectory = last;
+
+            if (folderDialog.ShowDialog() != true)
+                return;
+
+            string folder = folderDialog.FolderName;
+
+            try
+            {
+                Mouse.OverrideCursor = Cursors.Wait;
+
+                var scan = DbfFolderScanner.Scan(folder);
+                int imported = DbfFolderScanner.ImportEmployees(scan);
+                string report = DbfFolderScanner.SaveReport(scan);
+                DbfFolderScanner.SaveLastFolder(folder);
+
+                LoadEmployees();
+                Mouse.OverrideCursor = null;
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Folder: {folder}");
+                sb.AppendLine($"DBF files found: {scan.Files.Count}");
+                sb.AppendLine();
+
+                if (scan.Files.Count == 0)
+                {
+                    sb.AppendLine("No .dbf files were found in this folder or its subfolders.");
+                }
+                else if (imported > 0)
+                {
+                    sb.AppendLine($"Employee file: {scan.EmployeeMasterFile.FileName}");
+                    sb.AppendLine($"Employees imported / updated: {imported}");
+                }
+                else
+                {
+                    sb.AppendLine("No file in this folder looks like an employee master,");
+                    sb.AppendLine("so nothing was imported.");
+                }
+
+                sb.AppendLine();
+                sb.AppendLine($"A detailed report listing every file and its columns was saved to:");
+                sb.AppendLine(report);
+
+                MessageBox.Show(sb.ToString(), imported > 0 ? "Folder Sync Complete" : "Folder Scanned",
+                    MessageBoxButton.OK, imported > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                Mouse.OverrideCursor = null;
+                MessageBox.Show($"Error scanning folder: {ex.Message}", "Folder Sync Error");
             }
         }
 

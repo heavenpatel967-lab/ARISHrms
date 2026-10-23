@@ -75,11 +75,11 @@ namespace ARISHrms.Services
                     string sql = @"INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift)
                                    VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift)
                                    ON CONFLICT(EmpCode) DO UPDATE SET
-                                       CardNo = excluded.CardNo,
-                                       FullName = excluded.FullName,
-                                       Department = excluded.Department,
-                                       Category = excluded.Category,
-                                       Shift = excluded.Shift;";
+                                       CardNo = CASE WHEN excluded.CardNo <> '' THEN excluded.CardNo ELSE Employees.CardNo END,
+                                       FullName = CASE WHEN excluded.FullName <> '' THEN excluded.FullName ELSE Employees.FullName END,
+                                       Department = CASE WHEN excluded.Department <> '' THEN excluded.Department ELSE Employees.Department END,
+                                       Category = CASE WHEN excluded.Category <> '' THEN excluded.Category ELSE Employees.Category END,
+                                       Shift = CASE WHEN excluded.Shift <> '' THEN excluded.Shift ELSE Employees.Shift END;";
                     connection.Execute(sql, employees, transaction);
                     transaction.Commit();
                 }

@@ -15,7 +15,15 @@
             <TextBlock Text="Employee Master Directory" FontSize="20" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
 
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Content="🔄 Sync .DBF Data" Click="BtnSyncDbf_Click" Width="140" Height="34" Background="#3B82F6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0">
+                <Button Content="📁 Sync DBFS Folder" Click="BtnSyncFolder_Click" Width="160" Height="34" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,10,0" ToolTip="Pick the folder that contains your .dbf files - the app finds the employee file automatically">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+
+                <Button Content="🔄 Single .DBF" Click="BtnSyncDbf_Click" Width="120" Height="34" Background="#64748B" Foreground="White" FontWeight="Bold" Margin="0,0,10,0">
                     <Button.Resources>
                         <Style TargetType="Border">
                             <Setter Property="CornerRadius" Value="4"/>
