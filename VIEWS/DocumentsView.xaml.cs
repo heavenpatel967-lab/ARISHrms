@@ -60,23 +60,7 @@ namespace ARISHrms.Views
             try
             {
                 var documents = DocumentService.GetEmployeeDocuments(empCode);
-                DocumentGrid.ItemsSource = documents;
-
-                if (documents.Count == 0)
-                {
-                    TxtInfo.Text = $"No documents for employee {empCode}";
-                    TxtExpiring.Text = "0";
-                    TxtExpired.Text = "0";
-                    return;
-                }
-
-                // Get expiring documents
-                var expiringDocs = DocumentService.GetExpiringDocuments(30);
-                var expiredDocs = DocumentService.GetExpiredDocuments();
-
-                TxtInfo.Text = $"Showing {documents.Count} document(s)";
-                TxtExpiring.Text = expiringDocs.Count(d => d.EmpCode == empCode).ToString();
-                TxtExpired.Text = expiredDocs.Count(d => d.EmpCode == empCode).ToString();
+                DocumentsGrid.ItemsSource = documents;
             }
             catch (Exception ex)
             {
@@ -84,14 +68,8 @@ namespace ARISHrms.Views
             }
         }
 
-        private void BtnUploadDocument_Click(object sender, RoutedEventArgs e)
+        private void BtnBrowse_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_selectedEmpCode))
-            {
-                MessageBox.Show("Please select an employee first", "Warning");
-                return;
-            }
-
             try
             {
                 var openFileDialog = new OpenFileDialog
@@ -102,31 +80,58 @@ namespace ARISHrms.Views
 
                 if (openFileDialog.ShowDialog() == true)
                 {
-                    string docCategory = "General"; // Could get from combo box
-                    string docName = System.IO.Path.GetFileNameWithoutExtension(openFileDialog.FileName);
-                    DateTime? expiryDate = null; // Could get from date picker
-
-                    int docId = DocumentService.UploadDocument(
-                        _selectedEmpCode,
-                        docCategory,
-                        docName,
-                        openFileDialog.FileName,
-                        expiryDate
-                    );
-
-                    MessageBox.Show($"Document uploaded successfully (ID: {docId})", "Success");
-                    LoadDocuments(_selectedEmpCode);
+                    TxtSelectedFilePath.Text = openFileDialog.FileName;
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error uploading document: {ex.Message}", "Error");
+                MessageBox.Show($"Error browsing files: {ex.Message}", "Error");
             }
         }
 
-        private void BtnDownloadDocument_Click(object sender, RoutedEventArgs e)
+        private void BtnSaveDocument_Click(object sender, RoutedEventArgs e)
         {
-            if (DocumentGrid.SelectedItem == null)
+            if (string.IsNullOrEmpty(_selectedEmpCode))
+            {
+                MessageBox.Show("Please select an employee first", "Warning");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(TxtSelectedFilePath.Text) || TxtSelectedFilePath.Text == "No file selected...")
+            {
+                MessageBox.Show("Please browse and select a file first", "Warning");
+                return;
+            }
+
+            try
+            {
+                string docCategory = CmbDocCategory.SelectedItem?.ToString() ?? "General";
+                string docName = string.IsNullOrEmpty(TxtDocName.Text) ? 
+                    System.IO.Path.GetFileNameWithoutExtension(TxtSelectedFilePath.Text) : 
+                    TxtDocName.Text;
+                
+                int docId = DocumentService.UploadDocument(
+                    _selectedEmpCode,
+                    docCategory,
+                    docName,
+                    TxtSelectedFilePath.Text,
+                    null
+                );
+
+                MessageBox.Show($"Document uploaded successfully (ID: {docId})", "Success");
+                TxtSelectedFilePath.Text = "No file selected...";
+                TxtDocName.Clear();
+                LoadDocuments(_selectedEmpCode);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving document: {ex.Message}", "Error");
+            }
+        }
+
+        private void BtnViewDocument_Click(object sender, RoutedEventArgs e)
+        {
+            if (DocumentsGrid.SelectedItem == null)
             {
                 MessageBox.Show("Please select a document first", "Warning");
                 return;
@@ -134,38 +139,27 @@ namespace ARISHrms.Views
 
             try
             {
-                var document = (DocumentService.EmployeeDocument)DocumentGrid.SelectedItem;
+                var document = (DocumentService.EmployeeDocument)DocumentsGrid.SelectedItem;
 
-                var saveFileDialog = new SaveFileDialog
+                if (System.IO.File.Exists(document.FilePath))
                 {
-                    FileName = document.DocName,
-                    Filter = "All Files (*.*)|*.*"
-                };
-
-                if (saveFileDialog.ShowDialog() == true)
+                    // Open the file with default application
+                    System.Diagnostics.Process.Start(document.FilePath);
+                }
+                else
                 {
-                    byte[] fileData = DocumentService.DownloadDocument(document.Id, out string fileName);
-
-                    if (fileData != null)
-                    {
-                        System.IO.File.WriteAllBytes(saveFileDialog.FileName, fileData);
-                        MessageBox.Show($"Document saved to {saveFileDialog.FileName}", "Success");
-                    }
-                    else
-                    {
-                        MessageBox.Show("Document not found", "Error");
-                    }
+                    MessageBox.Show("Document file not found", "Error");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error downloading document: {ex.Message}", "Error");
+                MessageBox.Show($"Error opening document: {ex.Message}", "Error");
             }
         }
 
         private void BtnDeleteDocument_Click(object sender, RoutedEventArgs e)
         {
-            if (DocumentGrid.SelectedItem == null)
+            if (DocumentsGrid.SelectedItem == null)
             {
                 MessageBox.Show("Please select a document first", "Warning");
                 return;
@@ -176,7 +170,7 @@ namespace ARISHrms.Views
             {
                 try
                 {
-                    var document = (DocumentService.EmployeeDocument)DocumentGrid.SelectedItem;
+                    var document = (DocumentService.EmployeeDocument)DocumentsGrid.SelectedItem;
 
                     bool deleted = DocumentService.DeleteDocument(document.Id);
 
@@ -194,34 +188,6 @@ namespace ARISHrms.Views
                 {
                     MessageBox.Show($"Error deleting document: {ex.Message}", "Error");
                 }
-            }
-        }
-
-        private void BtnViewDocument_Click(object sender, RoutedEventArgs e)
-        {
-            if (DocumentGrid.SelectedItem == null)
-            {
-                MessageBox.Show("Please select a document first", "Warning");
-                return;
-            }
-
-            try
-            {
-                var document = (DocumentService.EmployeeDocument)DocumentGrid.SelectedItem;
-
-                if (System.IO.File.Exists(document.FilePath))
-                {
-                    // Open the file with default application
-                    System.Diagnostics.Process.Start(document.FilePath);
-                }
-                else
-                {
-                    MessageBox.Show("Document file not found", "Error");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error opening document: {ex.Message}", "Error");
             }
         }
     }
