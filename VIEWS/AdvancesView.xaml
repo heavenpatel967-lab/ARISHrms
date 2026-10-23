@@ -1,0 +1,99 @@
+﻿<UserControl x:Class="ARISHrms.Views.AdvancesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F8FAFC">
+    <Grid Margin="0,10,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header & Employee Selection -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,15" LastChildFill="False">
+            <TextBlock Text="Monthly Advance Ledger" FontSize="20" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
+
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <TextBlock Text="Select Employee:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,10,0"/>
+                <ComboBox x:Name="CmbSelectEmployee" Width="250" Height="32" VerticalContentAlignment="Center" 
+                          DisplayMemberPath="FullName" SelectedValuePath="EmpCode" SelectionChanged="CmbSelectEmployee_SelectionChanged"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Summary KPI Cards -->
+        <Border Grid.Row="1" Background="#2563EB" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Total Advances Taken -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Total Advances Taken" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
+                    <TextBlock x:Name="TxtTotalAdvances" Text="₹ 0.00" Foreground="White" FontWeight="Bold" FontSize="24" Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <!-- Set Monthly Limit -->
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Set Monthly Limit (₹)" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
+                    <TextBox x:Name="TxtMonthlyLimit" Text="5000" Width="100" Height="28" HorizontalAlignment="Left" Margin="0,5,0,0" 
+                             Background="Transparent" Foreground="#FCD34D" FontWeight="Bold" FontSize="18" BorderThickness="0,0,0,2" BorderBrush="#FCD34D"/>
+                </StackPanel>
+
+                <!-- Advance Health -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Advance Health (Limit)" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
+                    <TextBlock x:Name="TxtHealth" Text="0 / 0 Safe" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <!-- Last 6 Months Trend -->
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="Last 6 Months Trend" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
+                    <StackPanel x:Name="TrendDotsContainer" Orientation="Horizontal" Margin="0,10,0,0" Height="15"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Monthly Breakdown Grid -->
+        <GroupBox Grid.Row="2" Header="Monthly Advances Breakdown" FontWeight="Bold" Foreground="#0F172A">
+            <DataGrid x:Name="AdvanceGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                      Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
+                <DataGrid.Columns>
+                    <!-- Status Dot Column -->
+                    <DataGridTemplateColumn Header="Status" Width="80">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Ellipse Width="12" Height="12" Fill="{Binding StatusColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="250"/>
+                    <DataGridTextColumn Header="Advance Amount" Binding="{Binding AdvanceAmount, StringFormat=₹ {0:N2}}" Width="250">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#10B981"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </GroupBox>
+
+        <!-- Footer Actions -->
+        <DockPanel Grid.Row="3" Margin="0,15,0,0" LastChildFill="False">
+            <TextBlock x:Name="TxtLifetimeAdvance" Text="Total Lifetime Advance: ₹ 0.00" FontWeight="Bold" Foreground="#475569" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="130" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="📄 Save as PDF" Click="BtnSavePdf_Click" Width="130" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,81 @@
+﻿<UserControl x:Class="ARISHrms.Views.EmployeesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F8FAFC">
+    <Grid Margin="0,10,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header, Sync DBF & Export Buttons -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,15" LastChildFill="False">
+            <TextBlock Text="Employee Master Directory" FontSize="20" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
+
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="🔄 Sync .DBF Data" Click="BtnSyncDbf_Click" Width="140" Height="34" Background="#3B82F6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+
+                <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="140" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Filters Bar -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,15">
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBox x:Name="TxtSearch" Width="200" Height="30" Margin="0,0,15,0" Padding="5,0" 
+                         VerticalContentAlignment="Center" TextChanged="Filter_Changed" 
+                         ToolTip="Search Name, Code, or Card No..."/>
+
+                <ComboBox x:Name="CmbDepartment" Width="150" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center"/>
+                <ComboBox x:Name="CmbDesignation" Width="150" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center"/>
+                <ComboBox x:Name="CmbCategory" Width="150" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center"/>
+                <ComboBox x:Name="CmbStatus" Width="120" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center">
+                    <ComboBoxItem Content="All Statuses" IsSelected="True"/>
+                    <ComboBoxItem Content="Active (Y)"/>
+                    <ComboBoxItem Content="Inactive (N)"/>
+                </ComboBox>
+
+                <Button Content="Reset Filters" Click="BtnResetFilters_Click" Width="90" Height="30" Background="#F1F5F9" Foreground="#475569" FontWeight="SemiBold"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- Data Grid -->
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6">
+            <DataGrid x:Name="EmployeeGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                      Background="Transparent" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0"
+                      MouseDoubleClick="EmployeeGrid_MouseDoubleClick">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Card No" Binding="{Binding CardNo}" Width="90"/>
+                    <DataGridTextColumn Header="Emp Code" Binding="{Binding EmpCode}" Width="90"/>
+                    <DataGridTextColumn Header="Employee Name" Binding="{Binding FullName}" Width="250"/>
+                    <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="150"/>
+                    <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="150"/>
+                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Footer -->
+        <DockPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBlock x:Name="TxtTotalCount" Text="Total Employees: 0" FontWeight="Bold" Foreground="#475569"/>
+            <TextBlock Text="Double-click an employee to view their 360° Profile &amp; Ledgers" 
+                       Foreground="#94A3B8" FontStyle="Italic" HorizontalAlignment="Right" DockPanel.Dock="Right"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

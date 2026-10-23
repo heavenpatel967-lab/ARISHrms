@@ -1,0 +1,101 @@
+﻿<UserControl x:Class="ARISHrms.Views.LeavesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F8FAFC">
+    <Grid Margin="0,10,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header & Actions -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,15" LastChildFill="False">
+            <TextBlock Text="Leave &amp; Village Visit Tracker" FontSize="20" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
+
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <TextBlock Text="Select Employee:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,10,0"/>
+                <ComboBox x:Name="CmbSelectEmployee" Width="250" Height="32" Margin="0,0,20,0" VerticalContentAlignment="Center" 
+                          DisplayMemberPath="FullName" SelectedValuePath="EmpCode" SelectionChanged="CmbSelectEmployee_SelectionChanged"/>
+                <Button Content="📄 Import CSV Data" Click="BtnImportCsv_Click" Width="140" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Log / Update Form -->
+        <GroupBox Grid.Row="1" Header="Log / Update Village Visit" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,15" Padding="15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="15"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Row 1: Dates -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Departure Date:" VerticalAlignment="Center" FontWeight="Normal" Margin="0,0,10,0"/>
+                <DatePicker x:Name="DpDeparture" Grid.Row="0" Grid.Column="1" Height="28"/>
+
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Expected Return:" VerticalAlignment="Center" FontWeight="Normal" Margin="20,0,10,0"/>
+                <DatePicker x:Name="DpExpectedReturn" Grid.Row="0" Grid.Column="3" Height="28"/>
+
+                <!-- Row 2: Actual Return & Notes -->
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Actual Return Date:" VerticalAlignment="Center" FontWeight="Normal" Margin="0,0,10,0"/>
+                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                    <DatePicker x:Name="DpActualReturn" Width="120" Height="28"/>
+                    <TextBlock Text="(Leave blank if not yet returned)" FontSize="10" Foreground="#94A3B8" FontStyle="Italic" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="Reason / Notes:" VerticalAlignment="Center" FontWeight="Normal" Margin="20,0,10,0"/>
+                <TextBox x:Name="TxtNotes" Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="2" Height="28" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,20,0"/>
+
+                <!-- Save Button -->
+                <Button Grid.Row="2" Grid.Column="5" Content="💾 Save Leave Record" Click="BtnSaveLeave_Click" Width="160" Height="32" Background="#2563EB" Foreground="White" FontWeight="Bold"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- History Grid -->
+        <GroupBox Grid.Row="2" Header="Leave History &amp; Late Tracking" FontWeight="Bold" Foreground="#0F172A">
+            <DataGrid x:Name="LeaveGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                      Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                    <DataGridTextColumn Header="Departure" Binding="{Binding DepartureDate, StringFormat=dd-MM-yyyy}" Width="120"/>
+                    <DataGridTextColumn Header="Expected Return" Binding="{Binding ExpectedReturn, StringFormat=dd-MM-yyyy}" Width="130"/>
+                    <DataGridTextColumn Header="Actual Return" Binding="{Binding ActualReturn, StringFormat=dd-MM-yyyy, TargetNullValue='Pending'}" Width="120"/>
+
+                    <!-- Late Days (Red if late, Green if on time) -->
+                    <DataGridTextColumn Header="Late Days" Binding="{Binding LateDays}" Width="100">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding LateDays}" Value="0">
+                                        <Setter Property="Foreground" Value="#10B981"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Reason / Notes" Binding="{Binding ReasonNotes}" Width="*"/>
+
+                    <DataGridTemplateColumn Header="Action" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="Delete" Click="BtnDeleteLeave_Click" Background="#EF4444" Foreground="White" Padding="5,2" BorderThickness="0" Cursor="Hand"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </GroupBox>
+    </Grid>
+</UserControl>

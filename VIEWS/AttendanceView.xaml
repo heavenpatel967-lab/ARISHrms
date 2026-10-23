@@ -1,0 +1,110 @@
+﻿<UserControl x:Class="ARISHrms.Views.AttendanceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F8FAFC">
+    <Grid>
+        <!-- Main Content -->
+        <Grid Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top Toolbar -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                <Button Content="📥 1. Import (.ddd)" Click="BtnImportDdd_Click" Width="130" Height="32" Background="#3B82F6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="📂 2. Import (.dbf)" Click="BtnImportDbf_Click" Width="130" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="✏️ Edit Selected" Click="BtnEditSelected_Click" Width="120" Height="32" Background="#F59E0B" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="✨ Auto-Fill OUTs" Click="BtnAutoCorrect_Click" Width="130" Height="32" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="🗑️ Clear Punches" Click="BtnClearData_Click" Width="120" Height="32" Background="#EF4444" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="📤 Export Final .ddd" Click="BtnExportDdd_Click" Width="140" Height="32" Background="#0F172A" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="⚙️ Settings" Click="BtnSettings_Click" Width="100" Height="32" Background="#64748B" Foreground="White" FontWeight="Bold" Margin="0,0,0,0" HorizontalAlignment="Right"/>
+            </StackPanel>
+
+            <!-- Search & Filters -->
+            <DockPanel Grid.Row="1" Margin="0,0,0,10" LastChildFill="False">
+                <CheckBox x:Name="ChkShowAll" Content="Show ALL Records (Including Complete)" VerticalAlignment="Center" Checked="ChkShowAll_Changed" Unchecked="ChkShowAll_Changed" FontWeight="SemiBold" Foreground="#475569"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold" Foreground="#475569"/>
+                    <TextBox x:Name="TxtSearchEmp" Width="180" Height="28" KeyDown="TxtSearchEmp_KeyDown" VerticalContentAlignment="Center" Padding="5,0"/>
+                    <Button Content="Find" Click="BtnSearch_Click" Width="60" Height="28" Margin="5,0,0,0" Background="#38BDF8" Foreground="White"/>
+                    <Button Content="Clear" Click="BtnClearSearch_Click" Width="60" Height="28" Margin="5,0,0,0" Background="#E2E8F0" Foreground="#0F172A"/>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Data Grid -->
+            <GroupBox x:Name="GridGroupBox" Grid.Row="2" Header="⚠️ Exceptions (Missing Punches)" FontWeight="Bold" Foreground="#0F172A">
+                <DataGrid x:Name="ExceptionGrid" AutoGenerateColumns="False" CanUserAddRows="False" 
+                          Background="White" RowHeight="30" AlternatingRowBackground="#F1F5F9" HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="40">
+                            <DataGridTemplateColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <CheckBox Click="chkSelectAll_Click" HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.HeaderTemplate>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Emp Code" Binding="{Binding EmpCode}" IsReadOnly="True" Width="80"/>
+                        <DataGridTextColumn Header="Name" Binding="{Binding FullName}" IsReadOnly="True" Width="150"/>
+                        <DataGridTextColumn Header="Cat" Binding="{Binding Category}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="Shift" Binding="{Binding Shift}" IsReadOnly="True" Width="50"/>
+                        <DataGridTextColumn Header="Date" Binding="{Binding WorkDate, StringFormat=dd-MM-yyyy}" IsReadOnly="True" Width="90"/>
+                        <DataGridTextColumn Header="In" Binding="{Binding PunchIn, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="L-Out" Binding="{Binding LunchOut, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="L-In" Binding="{Binding LunchIn, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="Out" Binding="{Binding PunchOut, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="P5" Binding="{Binding Punch5, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="P6" Binding="{Binding Punch6, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="P7" Binding="{Binding Punch7, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridTextColumn Header="P8" Binding="{Binding Punch8, StringFormat=HH:mm}" IsReadOnly="True" Width="60"/>
+                        <DataGridCheckBoxColumn Header="Exception?" Binding="{Binding IsException}" IsReadOnly="True" Width="80"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+        </Grid>
+
+        <!-- Hidden Settings Overlay Panel -->
+        <Grid x:Name="SettingsPanelOverlay" Background="#80000000" Visibility="Collapsed">
+            <Border Background="White" Width="550" Height="500" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Grid Margin="20">
+                    <TextBlock Text="Advanced Rules &amp; Overrides" FontSize="18" FontWeight="Bold" Margin="0,0,0,20" VerticalAlignment="Top"/>
+                    <Button Content="X" Click="BtnCloseSettings_Click" HorizontalAlignment="Right" VerticalAlignment="Top" Width="30" Height="30" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
+
+                    <StackPanel Margin="0,40,0,0">
+                        <TextBlock Text="Always Auto-Fill (Directors/Managers)" FontWeight="SemiBold"/>
+                        <DockPanel Margin="0,5,0,15">
+                            <TextBox x:Name="TxtAutoFillEmp" Width="100" Margin="0,0,10,0"/>
+                            <Button Content="Add" Click="BtnAddAutoFill_Click" Width="60"/>
+                            <Button Content="Remove Selected" Click="BtnRemoveAutoFill_Click" Width="110" Margin="10,0,0,0"/>
+                        </DockPanel>
+                        <ListBox x:Name="ListAutoFill" Height="60" Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Shift Exception: Allow Early Lunch" FontWeight="SemiBold"/>
+                        <DockPanel Margin="0,5,0,15">
+                            <TextBox x:Name="TxtEarlyLunchEmp" Width="100" Margin="0,0,10,0"/>
+                            <Button Content="Add" Click="BtnAddEarlyLunch_Click" Width="60"/>
+                            <Button Content="Remove Selected" Click="BtnRemoveEarlyLunch_Click" Width="110" Margin="10,0,0,0"/>
+                        </DockPanel>
+                        <ListBox x:Name="ListEarlyLunch" Height="60" Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Trick Legacy System (Move Week-Off Punches)" FontWeight="SemiBold" Foreground="#EF4444"/>
+                        <DockPanel Margin="0,5,0,0">
+                            <TextBlock Text="From:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBox x:Name="TxtSwapFrom" Width="90" Text="DD-MM-YYYY"/>
+                            <TextBlock Text="To:" VerticalAlignment="Center" Margin="15,0,5,0"/>
+                            <TextBox x:Name="TxtSwapTo" Width="90" Text="DD-MM-YYYY"/>
+                            <Button Content="Apply Swap" Click="BtnApplyDateSwap_Click" Background="#EF4444" Foreground="White" Width="100" Margin="15,0,0,0"/>
+                        </DockPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,97 @@
+﻿<Window x:Class="ARISHrms.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ARIS HRMS &amp; Payroll Suite" Height="820" Width="1440"
+        WindowStartupLocation="CenterScreen" Background="#F8FAFC">
+
+    <Window.Resources>
+        <!-- Sidebar Navigation Button Style -->
+        <Style x:Key="NavBtnStyle" TargetType="Button">
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="Margin" Value="12,4"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#334155"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Navigation Sidebar -->
+        <Border Grid.Column="0" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <!-- Brand Header -->
+                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,20">
+                    <TextBlock Text="ARIS" Foreground="#38BDF8" FontSize="24" FontWeight="Bold"/>
+                    <TextBlock Text="HRMS &amp; PAYROLL SUITE" Foreground="#64748B" FontSize="11" FontWeight="Bold" Margin="0,2,0,0"/>
+                    <Separator Margin="0,18,0,0" Background="#1E293B"/>
+                </StackPanel>
+
+                <!-- Footer Status -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="20,16">
+                    <Separator Margin="0,0,0,12" Background="#1E293B"/>
+                    <TextBlock Text="Local DB: Active" Foreground="#10B981" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock Text="v2.0 Unified Enterprise" Foreground="#475569" FontSize="11" Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Navigation Links -->
+                <StackPanel>
+                    <TextBlock Text="CORE MODULES" Foreground="#475569" FontSize="11" FontWeight="Bold" Margin="24,10,0,8"/>
+                    <Button Content="⏱️  Attendance &amp; Punches" Style="{StaticResource NavBtnStyle}" Tag="Attendance" Click="Nav_Click"/>
+                    <Button Content="👥  Employee Master" Style="{StaticResource NavBtnStyle}" Tag="Employees" Click="Nav_Click"/>
+
+                    <TextBlock Text="FINANCIALS &amp; PAYROLL" Foreground="#475569" FontSize="11" FontWeight="Bold" Margin="24,18,0,8"/>
+                    <Button Content="💳  Loan Ledger" Style="{StaticResource NavBtnStyle}" Tag="Loans" Click="Nav_Click"/>
+                    <Button Content="💵  Advance Ledger" Style="{StaticResource NavBtnStyle}" Tag="Advances" Click="Nav_Click"/>
+
+                    <TextBlock Text="HR &amp; OPERATIONS" Foreground="#475569" FontSize="11" FontWeight="Bold" Margin="24,18,0,8"/>
+                    <Button Content="🌴  Village Visit / Leaves" Style="{StaticResource NavBtnStyle}" Tag="Leaves" Click="Nav_Click"/>
+                    <Button Content="📁  Document Manager" Style="{StaticResource NavBtnStyle}" Tag="Documents" Click="Nav_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Workspace Area -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="64"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top Header Bar -->
+            <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="28,0">
+                <DockPanel LastChildFill="False">
+                    <TextBlock x:Name="TxtCurrentViewTitle" Text="Attendance &amp; Punch Management" 
+                               FontSize="18" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Dynamic Workspace Host -->
+            <ContentControl x:Name="MainContentHost" Grid.Row="1" Margin="20"/>
+        </Grid>
+    </Grid>
+</Window>
