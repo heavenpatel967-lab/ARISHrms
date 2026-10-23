@@ -48,34 +48,22 @@ namespace ARISHrms.Services
 
         public static int ParseEmployeesFromDbf(string filePath)
         {
-            var employees = new List<Employee>();
-            string fileContent = File.ReadAllText(filePath);
+            // 1) Preferred: read the real column names from the DBF header
+            List<Employee> employees = null;
+            try { employees = DbfReader.ReadEmployees(filePath); }
+            catch (InvalidDataException) { /* not a standard DBF - try the legacy text scan below */ }
 
-            // 🔥 FIX: The Regex is now highly forgiving. 
-            // It uses '.' (any character) instead of strictly requiring numbers or letters.
-            // This ensures new employees with blank categories or shifts are still captured!
-            string pattern = @"(?:[YN\s\*])?(?<EmpCode>\d{4})\s*(?<CardNo>\d{8})(?<Name>.{25})(?<Sex>.)(?<Comp>.{3})\s+(?<Dept>.{3})\s+(?<Cat>.{3})(?<Shift>.)";
-            MatchCollection matches = Regex.Matches(fileContent, pattern);
-
-            foreach (Match match in matches)
-            {
-                string rawEmpCode = match.Groups["EmpCode"].Value.Trim();
-                string finalEmpCode = int.Parse(rawEmpCode).ToString("D4");
-
-                // 🔥 FIX: Added .Trim() to every single property to strip invisible DBF spacing
-                employees.Add(new Employee
-                {
-                    EmpCode = finalEmpCode,
-                    CardNo = match.Groups["CardNo"].Value.Trim(),
-                    FullName = match.Groups["Name"].Value.Trim(),
-                    Department = match.Groups["Dept"].Value.Trim(),
-                    Category = match.Groups["Cat"].Value.Trim(),
-                    Shift = match.Groups["Shift"].Value.Trim()
-                });
-            }
+            // 2) Fallback: the original ARISAttendance fixed-layout text scan
+            if (employees == null || employees.Count == 0)
+                employees = DbfReader.ReadEmployeesLegacy(filePath);
 
             if (employees.Count == 0)
-                return 0;
+            {
+                throw new InvalidDataException(
+                    "No employee records could be read from this file.\n\n" +
+                    DbfReader.Describe(filePath) +
+                    "\nExpected a column for the employee code (e.g. EMPCODE / ECODE / EMPNO).");
+            }
 
             using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
             {
