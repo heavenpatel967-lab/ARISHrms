@@ -181,6 +181,23 @@ namespace ARISHrms.Services
         }
 
         /// <summary>
+        /// Get every ledger row (monthly timeline) for an employee's active loans
+        /// </summary>
+        public static List<LoanLedger> GetLedgersForEmployee(string empCode)
+        {
+            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
+            {
+                connection.Open();
+                return connection.Query<LoanLedger>(
+                    @"SELECT ll.* FROM LoanLedgers ll
+                      INNER JOIN LoanMasters lm ON lm.Id = ll.LoanId
+                      WHERE ll.EmpCode = @EmpCode AND lm.Status = 'Active'
+                      ORDER BY ll.MonthYear, ll.LoanId",
+                    new { EmpCode = empCode }).ToList();
+            }
+        }
+
+        /// <summary>
         /// Get loan ledger for a specific month
         /// </summary>
         public static LoanLedger GetLoanLedgerForMonth(int loanId, string monthYear)

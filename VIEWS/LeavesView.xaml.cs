@@ -19,8 +19,8 @@ namespace ARISHrms.Views
         public LeavesView()
         {
             InitializeComponent();
-            LoadEmployeeList();
             InitializeLeaveTypes();
+            LoadEmployeeList();
         }
 
         private void LoadEmployeeList()
@@ -54,7 +54,7 @@ namespace ARISHrms.Views
                 {
                     connection.Open();
 
-                    // Ensure leave types exist
+                    // LeaveCode is UNIQUE, so INSERT OR IGNORE keeps this idempotent
                     connection.Execute(@"
                         INSERT OR IGNORE INTO LeaveTypes (LeaveCode, LeaveName, MaxDaysPerYear)
                         VALUES 
@@ -86,12 +86,11 @@ namespace ARISHrms.Views
             {
                 int currentYear = DateTime.Now.Year;
 
-                // Initialize leave balance for all leave types if not exists
+                // Make sure this employee has a balance row for every leave type
                 using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
                 {
                     connection.Open();
-                    var leaveTypes = connection.Query<LeaveService.LeaveType>(
-                        "SELECT * FROM LeaveTypes").ToList();
+                    var leaveTypes = connection.Query<LeaveType>("SELECT * FROM LeaveTypes").ToList();
 
                     foreach (var type in leaveTypes)
                     {
@@ -99,23 +98,21 @@ namespace ARISHrms.Views
                     }
                 }
 
-                // Load leave balances
-                var balances = LeaveService.GetLeaveBalance(empCode, currentYear);
-                BalanceGrid.ItemsSource = balances;
-
-                // Load village visits
-                var visits = LeaveService.GetVillageVisits(empCode, currentYear);
-                VisitsGrid.ItemsSource = visits;
-
-                // Calculate total late penalty
-                decimal totalLatePenalty = LeaveService.GetTotalLatePenalty(empCode, currentYear);
-
-                TxtInfo.Text = $"Showing {balances.Count} leave type(s) and {visits.Count} village visit(s)";
-                TxtTotalLatePenalty.Text = $"₹ {totalLatePenalty:N2}";
+                LeaveGrid.ItemsSource = LeaveService.GetVillageVisits(empCode, currentYear);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading leave data: {ex.Message}", "Error");
+            }
+        }
+
+        private int GetVillageVisitTypeId()
+        {
+            using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
+            {
+                connection.Open();
+                return connection.QuerySingleOrDefault<int?>(
+                    "SELECT Id FROM LeaveTypes WHERE LeaveCode = 'VV'") ?? 1;
             }
         }
 
@@ -127,21 +124,46 @@ namespace ARISHrms.Views
                 return;
             }
 
+            if (DpDeparture.SelectedDate == null || DpExpectedReturn.SelectedDate == null)
+            {
+                MessageBox.Show("Please choose both Departure Date and Expected Return", "Warning");
+                return;
+            }
+
+            DateTime departure = DpDeparture.SelectedDate.Value;
+            DateTime expected = DpExpectedReturn.SelectedDate.Value;
+
+            if (expected < departure)
+            {
+                MessageBox.Show("Expected Return cannot be before Departure Date", "Warning");
+                return;
+            }
+
             try
             {
-                DateTime departureDate = DateTime.Now;
-                DateTime expectedReturn = DateTime.Now.AddDays(5); // Default 5 days
+                string notes = string.IsNullOrWhiteSpace(TxtNotes.Text) ? "Village visit" : TxtNotes.Text.Trim();
 
                 int visitId = LeaveService.RecordVillageVisit(
-                    _selectedEmpCode, 
-                    1, // LeaveTypeId
-                    departureDate, 
-                    expectedReturn, 
-                    "Village visit",
-                    "System"
-                );
+                    _selectedEmpCode,
+                    GetVillageVisitTypeId(),
+                    departure,
+                    expected,
+                    notes,
+                    "System");
 
-                MessageBox.Show($"Village visit recorded successfully (ID: {visitId})", "Success");
+                // If the employee has already returned, record it so late days / penalty are computed
+                if (DpActualReturn.SelectedDate != null)
+                {
+                    LeaveService.UpdateActualReturn(visitId, DpActualReturn.SelectedDate.Value);
+                }
+
+                MessageBox.Show("Leave record saved successfully", "Success");
+
+                DpDeparture.SelectedDate = null;
+                DpExpectedReturn.SelectedDate = null;
+                DpActualReturn.SelectedDate = null;
+                TxtNotes.Clear();
+
                 LoadLeaveData(_selectedEmpCode);
             }
             catch (Exception ex)
@@ -152,37 +174,35 @@ namespace ARISHrms.Views
 
         private void BtnImportCsv_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("CSV Import functionality would go here", "Feature");
+            MessageBox.Show("CSV import is not implemented yet.", "Not available");
         }
 
         private void BtnDeleteLeave_Click(object sender, RoutedEventArgs e)
         {
-            if (VisitsGrid.SelectedItem == null)
+            // The button sits inside a grid row, so read the row from its DataContext
+            if ((sender as FrameworkElement)?.DataContext is not VillageVisit visit)
             {
                 MessageBox.Show("Please select a village visit first", "Warning");
                 return;
             }
 
-            if (MessageBox.Show("Are you sure you want to delete this village visit?", "Confirm Delete", 
-                MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            if (MessageBox.Show("Are you sure you want to delete this village visit?", "Confirm Delete",
+                MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                return;
+
+            try
             {
-                try
+                using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
                 {
-                    var visit = (LeaveService.VillageVisit)VisitsGrid.SelectedItem;
-
-                    using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-                    {
-                        connection.Open();
-                        connection.Execute("DELETE FROM VillageVisits WHERE Id = @Id", new { Id = visit.Id });
-                    }
-
-                    MessageBox.Show("Village visit deleted successfully", "Success");
-                    LoadLeaveData(_selectedEmpCode);
+                    connection.Open();
+                    connection.Execute("DELETE FROM VillageVisits WHERE Id = @Id", new { visit.Id });
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error deleting village visit: {ex.Message}", "Error");
-                }
+
+                LoadLeaveData(_selectedEmpCode);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error deleting village visit: {ex.Message}", "Error");
             }
         }
     }

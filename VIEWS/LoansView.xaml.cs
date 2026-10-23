@@ -1,7 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using ARISHrms.Data;
 using ARISHrms.Models;
 using ARISHrms.Services;
@@ -60,29 +63,82 @@ namespace ARISHrms.Views
             try
             {
                 var loans = LoanService.GetActiveLoansByEmployee(empCode);
-                LoanGrid.ItemsSource = loans;
+                var ledgers = LoanService.GetLedgersForEmployee(empCode);
 
-                if (loans.Count == 0)
+                LoanGrid.ItemsSource = ledgers;
+
+                decimal totalApproved = loans.Sum(l => l.LoanAmount);
+                decimal totalEmi = ledgers.Sum(l => l.EmiDeducted ?? 0);
+                decimal outstanding = loans.Sum(l => LoanService.GetOutstandingBalance(l.Id, empCode));
+
+                TxtTotalApproved.Text = $"₹ {totalApproved:N2}";
+                TxtTotalEmi.Text = $"₹ {totalEmi:N2}";
+                TxtOutstanding.Text = $"₹ {outstanding:N2}";
+
+                // Repayment health: months fully paid vs. total scheduled months
+                int totalMonths = ledgers.Count;
+                int paidMonths = ledgers.Count(l => (l.EmiDeducted ?? 0) >= l.MonthlyEMI && l.MonthlyEMI > 0);
+                TxtHealth.Text = $"{paidMonths} / {totalMonths} Paid";
+
+                HealthBarContainer.Children.Clear();
+                for (int i = 0; i < Math.Min(totalMonths, 36); i++)
                 {
-                    TxtInfo.Text = $"No active loans for employee {empCode}";
-                    TxtTotalOutstanding.Text = "₹ 0";
-                    return;
+                    bool paid = (ledgers[i].EmiDeducted ?? 0) >= ledgers[i].MonthlyEMI;
+                    HealthBarContainer.Children.Add(new Rectangle
+                    {
+                        Width = 6,
+                        Height = 10,
+                        Margin = new Thickness(0, 0, 2, 0),
+                        Fill = new SolidColorBrush(paid ? Color.FromRgb(0x10, 0xB9, 0x81) : Color.FromRgb(0x47, 0x55, 0x69))
+                    });
                 }
-
-                // Calculate total outstanding
-                decimal totalOutstanding = 0;
-                foreach (var loan in loans)
-                {
-                    decimal outstanding = LoanService.GetOutstandingBalance(loan.Id, empCode);
-                    totalOutstanding += outstanding;
-                }
-
-                TxtInfo.Text = $"Showing {loans.Count} active loan(s)";
-                TxtTotalOutstanding.Text = $"₹ {totalOutstanding:N2}";
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading loan data: {ex.Message}", "Error");
+            }
+        }
+
+        private void BtnCreateLoan_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_selectedEmpCode))
+            {
+                MessageBox.Show("Please select an employee first", "Warning");
+                return;
+            }
+
+            if (!decimal.TryParse(TxtLoanAmount.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+            {
+                MessageBox.Show("Please enter a valid loan amount", "Warning");
+                return;
+            }
+
+            if (!int.TryParse(TxtLoanTenure.Text, out var tenure) || tenure <= 0)
+            {
+                MessageBox.Show("Please enter a valid number of months", "Warning");
+                return;
+            }
+
+            if (!decimal.TryParse(TxtLoanRate.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var rate) || rate < 0)
+            {
+                MessageBox.Show("Please enter a valid interest rate (0 or more)", "Warning");
+                return;
+            }
+
+            try
+            {
+                decimal emi = LoanService.CalculateEMI(amount, rate, tenure);
+                LoanService.CreateLoan(_selectedEmpCode, DateTime.Now, amount, tenure, rate);
+
+                MessageBox.Show($"Loan created. Monthly EMI: ₹ {emi:N2}", "Success");
+
+                TxtLoanAmount.Clear();
+                TxtLoanTenure.Clear();
+                LoadLoanData(_selectedEmpCode);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error creating loan: {ex.Message}", "Error");
             }
         }
 
@@ -102,7 +158,6 @@ namespace ARISHrms.Views
                 {
                     var worksheet = workbook.Worksheets.Add("Loans");
 
-                    // Headers
                     worksheet.Cell("A1").Value = "Loan ID";
                     worksheet.Cell("B1").Value = "Loan Date";
                     worksheet.Cell("C1").Value = "Loan Amount";
@@ -125,15 +180,15 @@ namespace ARISHrms.Views
                         worksheet.Cell($"F{row}").Value = loan.MonthlyEMI;
                         worksheet.Cell($"G{row}").Value = outstanding;
                         worksheet.Cell($"H{row}").Value = loan.Status;
-
                         row++;
                     }
 
-                    // Format as table
-                    var table = worksheet.Range($"A1:H{row - 1}").CreateTable();
-                    table.Theme = XLTableTheme.TableStyleMedium2;
+                    if (row > 2)
+                    {
+                        var table = worksheet.Range($"A1:H{row - 1}").CreateTable();
+                        table.Theme = XLTableTheme.TableStyleMedium2;
+                    }
 
-                    // Adjust column widths
                     worksheet.Columns().AdjustToContents();
 
                     string fileName = $"Loans_{_selectedEmpCode}_{DateTime.Now:yyyyMMdd}.xlsx";
@@ -160,54 +215,28 @@ namespace ARISHrms.Views
             {
                 var loans = LoanService.GetActiveLoansByEmployee(_selectedEmpCode);
 
-                // For now, show a message - PDF export would require additional library
-                string pdfContent = $"Loan Report for Employee: {_selectedEmpCode}\n";
-                pdfContent += $"Generated: {DateTime.Now:dd-MM-yyyy HH:mm}\n\n";
+                string content = $"Loan Report for Employee: {_selectedEmpCode}\n";
+                content += $"Generated: {DateTime.Now:dd-MM-yyyy HH:mm}\n\n";
 
                 foreach (var loan in loans)
                 {
                     decimal outstanding = LoanService.GetOutstandingBalance(loan.Id, _selectedEmpCode);
-                    pdfContent += $"Loan ID: {loan.Id}\n";
-                    pdfContent += $"Amount: ₹{loan.LoanAmount}\n";
-                    pdfContent += $"EMI: ₹{loan.MonthlyEMI}\n";
-                    pdfContent += $"Outstanding: ₹{outstanding}\n";
-                    pdfContent += $"Status: {loan.Status}\n\n";
+                    content += $"Loan ID: {loan.Id}\n";
+                    content += $"Amount: ₹{loan.LoanAmount}\n";
+                    content += $"EMI: ₹{loan.MonthlyEMI}\n";
+                    content += $"Outstanding: ₹{outstanding}\n";
+                    content += $"Status: {loan.Status}\n\n";
                 }
 
-                // Save as text for demo (would use iTextSharp or similar for PDF in production)
+                // Plain-text report for now; real PDF output would need a PDF library
                 string fileName = $"Loan_Report_{_selectedEmpCode}_{DateTime.Now:yyyyMMdd}.txt";
-                System.IO.File.WriteAllText(fileName, pdfContent);
+                System.IO.File.WriteAllText(fileName, content);
 
-                MessageBox.Show($"Loan report saved to {fileName}", "Success");
+                MessageBox.Show($"Loan report saved to {fileName} (text format, not PDF)", "Success");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error saving report: {ex.Message}", "Error");
-            }
-        }
-
-        private void BtnCreateLoan_Click(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrEmpty(_selectedEmpCode))
-            {
-                MessageBox.Show("Please select an employee first", "Warning");
-                return;
-            }
-
-            // Open a dialog to create a new loan
-            try
-            {
-                decimal loanAmount = 100000; // Default
-                int tenureMonths = 24;
-                decimal interestRate = 12; // 12% p.a.
-
-                int loanId = LoanService.CreateLoan(_selectedEmpCode, DateTime.Now, loanAmount, tenureMonths, interestRate);
-                MessageBox.Show($"Loan created successfully (ID: {loanId})", "Success");
-                LoadLoanData(_selectedEmpCode);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating loan: {ex.Message}", "Error");
             }
         }
     }

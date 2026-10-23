@@ -65,7 +65,7 @@
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="150"/>
-                    <DataGridTextColumn Header="Pending Loan Amount" Binding="{Binding PendingLoanAmount, StringFormat=₹ {0:N2}}" Width="250"/>
+                    <DataGridTextColumn Header="Pending Loan Amount" Binding="{Binding OutstandingBalance, StringFormat=₹ {0:N2}}" Width="250"/>
                     <DataGridTextColumn Header="EMI Deducted" Binding="{Binding EmiDeducted, TargetNullValue='-', StringFormat=₹ {0:N2}}" Width="200">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -80,6 +80,13 @@
 
         <!-- Footer Actions -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <TextBlock Text="Amount (₹):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,6,0"/>
+            <TextBox x:Name="TxtLoanAmount" Width="90" Height="34" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,12,0"/>
+            <TextBlock Text="Months:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,6,0"/>
+            <TextBox x:Name="TxtLoanTenure" Width="50" Height="34" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,12,0"/>
+            <TextBlock Text="Rate % p.a.:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,6,0"/>
+            <TextBox x:Name="TxtLoanRate" Text="0" Width="50" Height="34" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,12,0"/>
+            <Button Content="➕ Create Loan" Click="BtnCreateLoan_Click" Width="120" Height="34" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,20,0"/>
             <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="130" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
             <Button Content="📄 Save as PDF" Click="BtnSavePdf_Click" Width="130" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
         </StackPanel>

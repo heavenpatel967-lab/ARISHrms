@@ -105,7 +105,7 @@ namespace ARISHrms.Views
 
             try
             {
-                string docCategory = CmbDocCategory.SelectedItem?.ToString() ?? "General";
+                string docCategory = (CmbDocCategory.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "General";
                 string docName = string.IsNullOrEmpty(TxtDocName.Text) ? 
                     System.IO.Path.GetFileNameWithoutExtension(TxtSelectedFilePath.Text) : 
                     TxtDocName.Text;
@@ -131,7 +131,7 @@ namespace ARISHrms.Views
 
         private void BtnViewDocument_Click(object sender, RoutedEventArgs e)
         {
-            if (DocumentsGrid.SelectedItem == null)
+            if ((sender as FrameworkElement)?.DataContext is not EmployeeDocument rowDoc)
             {
                 MessageBox.Show("Please select a document first", "Warning");
                 return;
@@ -139,12 +139,12 @@ namespace ARISHrms.Views
 
             try
             {
-                var document = (DocumentService.EmployeeDocument)DocumentsGrid.SelectedItem;
+                var document = rowDoc;
 
                 if (System.IO.File.Exists(document.FilePath))
                 {
                     // Open the file with default application
-                    System.Diagnostics.Process.Start(document.FilePath);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(document.FilePath) { UseShellExecute = true });
                 }
                 else
                 {
@@ -159,7 +159,7 @@ namespace ARISHrms.Views
 
         private void BtnDeleteDocument_Click(object sender, RoutedEventArgs e)
         {
-            if (DocumentsGrid.SelectedItem == null)
+            if ((sender as FrameworkElement)?.DataContext is not EmployeeDocument rowDoc)
             {
                 MessageBox.Show("Please select a document first", "Warning");
                 return;
@@ -170,7 +170,7 @@ namespace ARISHrms.Views
             {
                 try
                 {
-                    var document = (DocumentService.EmployeeDocument)DocumentsGrid.SelectedItem;
+                    var document = rowDoc;
 
                     bool deleted = DocumentService.DeleteDocument(document.Id);
 

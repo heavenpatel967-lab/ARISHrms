@@ -91,6 +91,9 @@
             <TextBlock x:Name="TxtLifetimeAdvance" Text="Total Lifetime Advance: ₹ 0.00" FontWeight="Bold" Foreground="#475569" VerticalAlignment="Center" DockPanel.Dock="Left"/>
 
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <TextBlock Text="Amount (₹):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,8,0"/>
+                <TextBox x:Name="TxtAdvanceAmount" Width="100" Height="34" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,10,0"/>
+                <Button Content="➕ Request Advance" Click="BtnRequestAdvance_Click" Width="150" Height="34" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,20,0"/>
                 <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="130" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📄 Save as PDF" Click="BtnSavePdf_Click" Width="130" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
             </StackPanel>

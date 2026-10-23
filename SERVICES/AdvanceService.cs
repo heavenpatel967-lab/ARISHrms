@@ -17,6 +17,9 @@ namespace ARISHrms.Services
         public decimal RecoveryAmount { get; set; } = 0;
         public bool IsRecovered { get; set; } = false;
         public bool IsOverLimit { get; set; } = false;
+
+        // Used by AdvancesView grid (red = over limit, green = recovered, amber = pending)
+        public string StatusColor => IsOverLimit ? "#EF4444" : (IsRecovered ? "#10B981" : "#F59E0B");
     }
 
     public static class AdvanceService
