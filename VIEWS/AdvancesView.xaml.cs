@@ -68,7 +68,7 @@ namespace ARISHrms.Views
             string path = DbfSource.Find("monsum");
             if (path == null)
             {
-                TxtInfo.Text = "monsum.DBF not found. " + DbfSource.NotFoundHelp.Replace("\n\n", " ").Replace("\n", " ");
+                TxtInfo.Text = DbfSource.NotFoundMessage("monsum.DBF");
                 return false;
             }
 
@@ -366,7 +366,7 @@ namespace ARISHrms.Views
                     visits,
                     VillageVisitStore.Reliability(visits, DateTime.Today),
                     DateTime.Today,
-                    AbsenceStore.ForEmployee(_selected.EmpCode));
+                    AttendanceAbsences.Summary(_selected.EmpCode, DateTime.Today));
                 ReportPrinter.Print(report, Window.GetWindow(this));
             }
             catch (Exception ex)

@@ -46,9 +46,11 @@ namespace ARISHrms.Views
                     HistoryGrid.ItemsSource = null;
                     _history = new List<HistoryRow>();
                     _historyEmp = null;
+                    HistoryLeaveMonths.Show(null, null);
                     TxtHistoryInfo.Text = "No employee matches your search.";
                 });
-                DpLeaveDate.SelectedDate = DateTime.Today;
+                // editing leaves from the summary refreshes the history grid
+                HistoryLeaveMonths.Changed += (sender, e) => ShowHistory();
             }
             catch (Exception ex)
             {
@@ -251,6 +253,9 @@ namespace ARISHrms.Views
             HistoryGrid.ItemsSource = null;
             HistoryGrid.ItemsSource = _history;
 
+            var emp = _employeeList.FirstOrDefault(x => x.EmpCode == _historyEmp);
+            HistoryLeaveMonths.Show(_historyEmp, emp?.DisplayName ?? _historyEmp);
+
             if (_history.Count == 0)
             {
                 TxtHistoryInfo.Text = "No attendance data found for this employee in this date range.";
@@ -262,54 +267,6 @@ namespace ARISHrms.Views
             TxtHistoryInfo.Text =
                 $"Present {_history.Count(r => r.Status == "Present")}   Late {_history.Count(r => r.Status == "Late")}   " +
                 $"Absent {absent}  (informed {absent - without}, without informing {without})   Week Off {_history.Count(r => r.Status == "Week Off")}";
-        }
-
-        private void SaveLeaveType(object sender, bool informed)
-        {
-            if (_historyEmp == null || !((sender as FrameworkElement)?.DataContext is HistoryRow row) || !row.IsAbsent) return;
-            try
-            {
-                AbsenceStore.Set(_historyEmp, row.SortDate, informed, row.LeaveNote);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Could not save the leave type: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            ShowHistory();
-        }
-
-        private void RbInformed_Click(object sender, RoutedEventArgs e) => SaveLeaveType(sender, true);
-        private void RbUninformed_Click(object sender, RoutedEventArgs e) => SaveLeaveType(sender, false);
-
-        /// <summary>Mark any date - also a day that MONDATA does not list.</summary>
-        private void BtnMarkLeave_Click(object sender, RoutedEventArgs e)
-        {
-            string code = CmbEmployee.SelectedValue?.ToString();
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                MessageBox.Show("Please choose an employee.", "Missing employee");
-                return;
-            }
-            if (DpLeaveDate.SelectedDate == null)
-            {
-                MessageBox.Show("Please choose the leave date.", "Missing date");
-                return;
-            }
-
-            bool informed = CmbLeaveKind.SelectedIndex != 1;
-            try
-            {
-                AbsenceStore.Set(code, DpLeaveDate.SelectedDate.Value, informed, TxtLeaveNote.Text);
-                TxtLeaveNote.Clear();
-                MessageBox.Show($"{DpLeaveDate.SelectedDate.Value:dd-MMM-yyyy} saved as: {(informed ? "Informed (permission)" : "Without informing")}.",
-                    "Leave marked", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-            if (_historyEmp == code) ShowHistory();
         }
 
         private void BtnExportHistory_Click(object sender, RoutedEventArgs e)

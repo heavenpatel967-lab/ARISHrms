@@ -148,9 +148,10 @@ namespace ARISHrms.Views
                 Mouse.OverrideCursor = Cursors.Wait;
 
                 // 1) Read and merge the files - nothing is saved yet
+                // remember the folder first, so Loans / Advances / Reports find monsum + mstsal even if the sync stops early
+                DbfFolderScanner.SaveLastFolder(folder);
                 var scan = DbfFolderScanner.Scan(folder);
                 var employees = DbfFolderScanner.BuildEmployees(scan);
-                DbfFolderScanner.SaveLastFolder(folder);
 
                 int removed = 0, kept = 0;
                 bool saved = false;
@@ -245,6 +246,7 @@ namespace ARISHrms.Views
             {
                 try
                 {
+                    DbfFolderScanner.SaveLastFolder(System.IO.Path.GetDirectoryName(openFileDialog.FileName));
                     int count = PunchParserService.ParseEmployeesFromDbf(openFileDialog.FileName);
                     LoadEmployees(); // Instantly refresh the UI grid
 

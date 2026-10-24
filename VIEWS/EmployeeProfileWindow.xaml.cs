@@ -34,20 +34,13 @@ namespace ARISHrms.Views
 
             // remarks can be added right here, and are hidden from the print-out's input area
             TrackRecord.ShowEmployee(_employee.EmpCode);
+            TrackRecord.ShowLeaveMonths = false;     // the 360 page has its own leave section just above
         }
 
         private void LoadAbsences()
         {
-            try
-            {
-                var marks = AbsenceStore.ForEmployee(_employee.EmpCode);
-                AbsenceGrid.ItemsSource = marks.OrderByDescending(m => m.AbsenceDate).ToList();
-                TxtAbsenceCount.Text = AbsenceLogic.Summarize(marks).Text;
-            }
-            catch (Exception ex)
-            {
-                TxtAbsenceCount.Text = "Could not read absences: " + ex.Message;
-            }
+            LeaveMonths.Show(_employee.EmpCode, _employee.DisplayName);
+            LeaveMonths.Changed += (s, e) => TrackRecord.ShowEmployee(_employee.EmpCode);
         }
 
         private void LoadAdvanceTaken()
@@ -97,7 +90,7 @@ namespace ARISHrms.Views
             {
                 TxtTotalLoan.Text = TxtTotalAdvance.Text = "-";
                 TxtLoanHealth.Text = TxtAdvanceHealth.Text = "-";
-                TxtDataNote.Text = "Loan and advance figures need monsum.DBF. Pick your DBFS folder in Employee Master (Sync DBFS Folder).";
+                TxtDataNote.Text = "Loan and advance figures: " + DbfSource.NotFoundMessage("monsum.DBF");
                 _financialNote = TxtDataNote.Text;
                 return;
             }
@@ -169,7 +162,7 @@ namespace ARISHrms.Views
                     visits,
                     VillageVisitStore.Reliability(visits, DateTime.Today),
                     DateTime.Today,
-                    AbsenceStore.ForEmployee(_employee.EmpCode));
+                    AttendanceAbsences.Summary(_employee.EmpCode, DateTime.Today));
 
                 ReportPrinter.Print(report, this);
             }

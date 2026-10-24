@@ -102,3 +102,132 @@ namespace ARISHrms.Services
         }
     }
 }
+
+namespace ARISHrms.Services
+{
+    /// <summary>One month of the leave summary: "Jul-2026  3 informed / 5 without informing".</summary>
+    public class MonthLeave
+    {
+        public DateTime Month { get; set; }                   // first day of the month
+        public int Informed { get; set; }
+        public int Uninformed { get; set; }
+
+        public string Label => Month.ToString("MMM-yyyy", CultureInfo.InvariantCulture);
+        public int Total => Informed + Uninformed;
+        public string Text => Total == 0 ? "no leave" : $"{Informed} informed / {Uninformed} without informing";
+        public string InformedText => Informed.ToString();
+        public string UninformedText => Uninformed.ToString();
+        public string UninformedColor => Uninformed > 0 ? "#E74C3C" : "#94A3B8";
+        public string InformedColor => Informed > 0 ? "#27AE60" : "#94A3B8";
+    }
+
+    public class MonthlyLeaveSummary
+    {
+        public List<MonthLeave> Months = new List<MonthLeave>();   // newest month first
+        public bool FromAttendance;                                // true = absent days counted from MONDATA
+        public string Source = "";
+        public int Informed => Months.Sum(m => m.Informed);
+        public int Uninformed => Months.Sum(m => m.Uninformed);
+        public string Text => Informed + Uninformed == 0 ? "No leave in the last 6 months" : $"Last 6 months: {Informed} informed / {Uninformed} without informing";
+
+        /// <summary>Same totals in the shape the track-record verdict uses.</summary>
+        public AbsenceSummary AsSummary() => new AbsenceSummary { Informed = Informed, Uninformed = Uninformed };
+    }
+
+    public static class MonthlyLeave
+    {
+        /// <summary>
+        /// Last 6 months (ending this month), newest first.
+        /// Every absent day from the attendance file counts as INFORMED unless it was marked "without informing".
+        /// Dates that were marked but are not absent in the attendance file (e.g. added by hand) count as marked.
+        /// When the attendance file is not available, only the marked dates are counted.
+        /// </summary>
+        public static MonthlyLeaveSummary Build(IEnumerable<DateTime> absentDaysFromAttendance, IEnumerable<AbsenceMark> marks, DateTime today)
+        {
+            var first = new DateTime(today.Year, today.Month, 1).AddMonths(-5);
+            var last = new DateTime(today.Year, today.Month, 1).AddMonths(1);       // exclusive
+
+            var markByDate = marks.GroupBy(m => m.AbsenceDate.Date).ToDictionary(g => g.Key, g => g.OrderBy(x => x.Id).Last());
+
+            // the set of leave days = absent days in the attendance file + every marked date
+            var days = new HashSet<DateTime>();
+            bool fromAtt = absentDaysFromAttendance != null;
+            if (fromAtt) foreach (var d in absentDaysFromAttendance) days.Add(d.Date);
+            foreach (var d in markByDate.Keys) days.Add(d);
+
+            var summary = new MonthlyLeaveSummary { FromAttendance = fromAtt };
+            var byMonth = new Dictionary<DateTime, MonthLeave>();
+            for (int i = 0; i < 6; i++)
+            {
+                var m = first.AddMonths(i);
+                byMonth[m] = new MonthLeave { Month = m };
+            }
+
+            foreach (var d in days)
+            {
+                if (d < first || d >= last) continue;
+                var key = new DateTime(d.Year, d.Month, 1);
+                bool informed = !markByDate.TryGetValue(d, out var mk) || mk.Informed;
+                if (informed) byMonth[key].Informed++; else byMonth[key].Uninformed++;
+            }
+
+            summary.Months = byMonth.Values.OrderByDescending(m => m.Month).ToList();
+            return summary;
+        }
+    }
+
+    /// <summary>
+    /// Absent days per employee from MONDATA.DBF, read once and kept until the file changes - so switching
+    /// employees on the Loan / Advance / 360 screens does not re-read a large file every time.
+    /// </summary>
+    public static class AttendanceAbsences
+    {
+        private static string _path;
+        private static DateTime _stamp;
+        private static long _length;
+        private static Dictionary<string, List<DateTime>> _byEmp;
+
+        /// <summary>Absent days for the employee, or null when MONDATA is not available.</summary>
+        public static List<DateTime> For(string empCode, out string source)
+        {
+            source = "";
+            string path = DbfSource.GetMonDataPath();
+            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path)) return null;
+
+            try
+            {
+                var info = new System.IO.FileInfo(path);
+                if (_byEmp == null || _path != path || _stamp != info.LastWriteTimeUtc || _length != info.Length)
+                {
+                    var map = new Dictionary<string, List<DateTime>>();
+                    foreach (var r in AttendanceReportService.Read(path, (emp, date) => true))
+                    {
+                        if (!r.IsAbsent) continue;
+                        // Wednesday week-off is not a leave (same rule as the history report)
+                        if (r.Date.DayOfWeek == DayOfWeek.Wednesday && r.WeekOffDay.ToUpperInvariant().Contains("WED")) continue;
+                        string key = EmployeeLookup.Key(r.EmpCode);
+                        if (!map.TryGetValue(key, out var list)) map[key] = list = new List<DateTime>();
+                        list.Add(r.Date.Date);
+                    }
+                    _byEmp = map; _path = path; _stamp = info.LastWriteTimeUtc; _length = info.Length;
+                }
+
+                source = System.IO.Path.GetFileName(path);
+                return _byEmp.TryGetValue(EmployeeLookup.Key(empCode), out var days) ? days : new List<DateTime>();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Monthly informed / without-informing summary for one employee (last 6 months).</summary>
+        public static MonthlyLeaveSummary Summary(string empCode, DateTime today)
+        {
+            var absent = For(empCode, out string source);
+            var s = MonthlyLeave.Build(absent, AbsenceStore.ForEmployee(empCode), today);
+            s.Source = absent == null ? "marked days only (MONDATA.DBF not found)" : $"absent days from {source}";
+            return s;
+        }
+    }
+}

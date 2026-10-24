@@ -26,6 +26,7 @@ namespace ARISHrms.Views
         {
             InitializeComponent();
             DpRemarkDate.SelectedDate = DateTime.Today;
+            LeaveMonths.Changed += (s, e) => { Reload(); Changed?.Invoke(this, EventArgs.Empty); };
             ShowEmployee(null);
         }
 
@@ -36,10 +37,18 @@ namespace ARISHrms.Views
             set => AddRemarkBox.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>Hide the monthly leave table (when the host screen already shows one).</summary>
+        public bool ShowLeaveMonths
+        {
+            get => LeaveMonths.Visibility == Visibility.Visible;
+            set => LeaveMonths.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         public void ShowEmployee(string empCode)
         {
             _empCode = string.IsNullOrWhiteSpace(empCode) ? null : empCode;
             IsEnabled = _empCode != null;
+            LeaveMonths.Show(_empCode, _empCode);
             Reload();
         }
 
@@ -55,7 +64,7 @@ namespace ARISHrms.Views
                 {
                     remarks = RemarkStore.ForEmployee(_empCode);
                     leave = LoadLeave(_empCode);
-                    absences = AbsenceLogic.Summarize(AbsenceStore.ForEmployee(_empCode));
+                    absences = LeaveMonths.Current.AsSummary();
                 }
                 catch (Exception ex)
                 {
@@ -68,8 +77,6 @@ namespace ARISHrms.Views
 
             TxtLeave.Text = leave.Text;
             IcLeaveDots.ItemsSource = leave.Dots;
-            TxtAbsences.Text = absences.Text;
-            IcAbsenceDots.ItemsSource = absences.Dots;
 
             var verdict = ARISHrms.Services.TrackRecord.Verdict(remarks, leave, absences);
             TxtVerdict.Text = _empCode == null ? "Select an employee" : verdict.Text;

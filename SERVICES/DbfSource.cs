@@ -16,16 +16,58 @@ namespace ARISHrms.Services
     public static class DbfSource
     {
         public const string NotFoundHelp =
-            "Pick your DBFS folder first:\n\nEmployee Master  ->  Sync DBFS Folder";
+            "Pick your DBFS folder once:\n\nEmployee Master  ->  Sync DBFS Folder\n\n(the folder that has mstsal.DBF and monsum.DBF)";
 
         public static string Folder => DbfFolderScanner.GetLastFolder();
 
-        /// <summary>Finds e.g. monsum.DBF in the saved folder (any letter case; the copy closest to the folder wins).</summary>
+        /// <summary>Folders to look in, best first: the remembered DBFS folder, then the folder of the chosen MONDATA file.</summary>
+        public static List<string> CandidateFolders()
+        {
+            var list = new List<string>();
+            void Add(string f)
+            {
+                if (string.IsNullOrWhiteSpace(f)) return;
+                try { f = Path.GetFullPath(f); } catch { return; }
+                if (Directory.Exists(f) && !list.Contains(f, StringComparer.OrdinalIgnoreCase)) list.Add(f);
+            }
+
+            Add(Folder);
+            try
+            {
+                using var c = new SqliteConnection(DatabaseInitializer.ConnectionString);
+                c.Open();
+                string md = c.QueryFirstOrDefault<string>("SELECT SettingValue FROM AppSettings WHERE SettingKey = 'MonDataPath'");
+                if (!string.IsNullOrWhiteSpace(md)) Add(Path.GetDirectoryName(md));
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>
+        /// Finds e.g. monsum.DBF or mstsal.DBF (any letter case; the copy closest to the folder wins).
+        /// Looks in every candidate folder; when it is found somewhere other than the remembered DBFS folder,
+        /// that folder is remembered, so all screens use the same place from then on.
+        /// </summary>
         public static string Find(string fileNameWithoutExtension)
         {
-            string folder = Folder;
-            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
-            return FindIn(folder, fileNameWithoutExtension);
+            var folders = CandidateFolders();
+            for (int i = 0; i < folders.Count; i++)
+            {
+                string hit = FindIn(folders[i], fileNameWithoutExtension);
+                if (hit == null) continue;
+                if (i > 0 || string.IsNullOrWhiteSpace(Folder)) DbfFolderScanner.SaveLastFolder(folders[i]);
+                return hit;
+            }
+            return null;
+        }
+
+        /// <summary>"monsum.DBF not found in D:\salary\... " - says exactly where it looked.</summary>
+        public static string NotFoundMessage(string fileName)
+        {
+            var folders = CandidateFolders();
+            return folders.Count == 0
+                ? $"{fileName} not found - no DBFS folder chosen yet. " + NotFoundHelp.Replace("\n\n", " ").Replace("\n", " ")
+                : $"{fileName} not found in: {string.Join("  /  ", folders)}. Choose the folder that contains it in Employee Master -> Sync DBFS Folder.";
         }
 
         public static string FindIn(string folder, string fileNameWithoutExtension)

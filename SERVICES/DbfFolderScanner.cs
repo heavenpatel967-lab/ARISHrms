@@ -471,7 +471,7 @@ namespace ARISHrms.Services
         /// <summary>Save the scan report next to the app so it can be reviewed or shared.</summary>
         public static string SaveReport(DbfScanResult scan)
         {
-            string path = Path.Combine(Directory.GetCurrentDirectory(), $"DbfScanReport_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+            string path = Path.Combine(DatabaseInitializer.AppFolder, $"DbfScanReport_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
             File.WriteAllText(path, scan.ToReportText(), Encoding.UTF8);
             scan.ReportPath = path;
             return path;

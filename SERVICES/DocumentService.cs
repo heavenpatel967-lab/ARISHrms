@@ -24,7 +24,7 @@ namespace ARISHrms.Services
     public static class DocumentService
     {
         private static readonly string DocumentStorageRoot = Path.Combine(
-            Directory.GetCurrentDirectory(), "Employees", "Documents");
+            ARISHrms.Data.DatabaseInitializer.AppFolder, "Employees", "Documents");
 
         static DocumentService()
         {

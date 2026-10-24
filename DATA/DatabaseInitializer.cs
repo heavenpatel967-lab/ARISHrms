@@ -6,7 +6,30 @@ namespace ARISHrms.Data
 {
     public static class DatabaseInitializer
     {
-        public static string DbPath => Path.Combine(Directory.GetCurrentDirectory(), "ArisHRMS.db");
+        /// <summary>
+        /// The app's own folder (where the .exe is) - stays the same however the app is started, so the
+        /// remembered DBFS folder, remarks, ticks and leave marks never "disappear" into a different database.
+        /// </summary>
+        public static string AppFolder => System.AppContext.BaseDirectory;
+
+        private static string _dbPath;
+
+        /// <summary>
+        /// ArisHRMS.db in the app folder. If an older copy exists only in the current folder (earlier versions
+        /// used that), keep using it so nothing that was already entered is left behind.
+        /// </summary>
+        public static string DbPath
+        {
+            get
+            {
+                if (_dbPath != null) return _dbPath;
+                string inApp = Path.Combine(AppFolder, "ArisHRMS.db");
+                string inCwd = Path.Combine(Directory.GetCurrentDirectory(), "ArisHRMS.db");
+                _dbPath = !File.Exists(inApp) && File.Exists(inCwd) ? inCwd : inApp;
+                return _dbPath;
+            }
+        }
+
         public static string ConnectionString => $"Data Source={DbPath};";
 
         public static void Initialize()
