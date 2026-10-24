@@ -46,7 +46,9 @@ namespace ARISHrms.Views
             TxtVillage.Text = OrDash(_employee.NativeVillage);
 
             bool left = string.Equals(_employee.Status?.Trim(), "N", StringComparison.OrdinalIgnoreCase);
-            TxtStatus.Text = left ? "Inactive / Left" : "Active";
+            TxtStatus.Text = left
+                ? (string.IsNullOrWhiteSpace(_employee.LeavingDisplay) ? "Inactive / Left" : $"Inactive / Left (on {_employee.LeavingDisplay})")
+                : "Active";
         }
 
         private void LoadFinancials()

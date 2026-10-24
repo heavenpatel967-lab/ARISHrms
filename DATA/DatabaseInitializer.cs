@@ -30,12 +30,14 @@ namespace ARISHrms.Data
                         AadharNo TEXT,
                         NativeVillage TEXT,
                         BasicSalary REAL NOT NULL DEFAULT 0,
-                        WageType TEXT
+                        WageType TEXT,
+                        LeavingDate TEXT
                     );");
 
                 // Upgrade databases created before these columns existed
                 EnsureColumn(connection, "Employees", "BasicSalary", "REAL NOT NULL DEFAULT 0");
                 EnsureColumn(connection, "Employees", "WageType", "TEXT");
+                EnsureColumn(connection, "Employees", "LeavingDate", "TEXT");
 
                 // 2. Attendance & Punches (8-Punch Architecture)
                 connection.Execute(@"

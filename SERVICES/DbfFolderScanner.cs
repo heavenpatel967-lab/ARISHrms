@@ -215,7 +215,7 @@ namespace ARISHrms.Services
                 var table = DbfReader.Read(file.FullPath);
                 var cols = DbfReader.MapEmployeeColumns(table);
 
-                var employees = DbfReader.ReadEmployees(table);
+                var employees = DbfReader.ReadEmployeeRows(table);
                 perFile.Add(employees);
                 mappings.AppendLine(DescribeMapping(file.FileName, cols, employees.Count));
             }
@@ -232,19 +232,10 @@ namespace ARISHrms.Services
                 merged = merged.Where(e => masterCodes.Contains(e.EmpCode)).ToList();
             }
 
-            // The old Payroll Companion showed department and category from the latest monsum row
-            // (the "true" values), falling back to EMPMAS only when monsum has none.
+            // The old Employee List replaced department and category with monsum.DBF values (last non-blank wins)
             for (int i = 0; i < scan.SourceFiles.Count; i++)
-            {
-                if (scan.SourceFiles[i].Priority != 1) continue;
-                var fromMonsum = perFile[i].ToDictionary(e => e.EmpCode, e => e);
-                foreach (var emp in merged)
-                {
-                    if (!fromMonsum.TryGetValue(emp.EmpCode, out var m)) continue;
-                    if (!string.IsNullOrWhiteSpace(m.Department)) emp.Department = m.Department;
-                    if (!string.IsNullOrWhiteSpace(m.Category)) emp.Category = m.Category;
-                }
-            }
+                if (scan.SourceFiles[i].Priority == 1)
+                    DbfReader.ApplyMonsumOverrides(merged, perFile[i]);
 
             if (merged.Count == 0)
                 return merged;
@@ -306,7 +297,7 @@ namespace ARISHrms.Services
                 mappings.AppendLine();
                 mappings.AppendLine("Why employees were marked LEFT (raw LEAVING_DT text; blank/zeros = active):");
                 foreach (var e in left)
-                    mappings.AppendLine($"  {e.EmpCode}: LEAVING_DT = '{e.LeavingRaw}'");
+                    mappings.AppendLine($"  {e.EmpCode}: LEAVING_DT = '{e.LeavingDate}'");
             }
 
             mappings.AppendLine();
@@ -431,8 +422,8 @@ namespace ARISHrms.Services
         private static void UpsertEmployees(SqliteConnection connection, List<Employee> employees, SqliteTransaction transaction)
         {
             connection.Execute(@"
-                        INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType, Status)
-                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift, @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'))
+                        INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType, Status, LeavingDate)
+                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift, @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'), @LeavingDate)
                         ON CONFLICT(EmpCode) DO UPDATE SET
                             CardNo = CASE WHEN excluded.CardNo <> '' THEN excluded.CardNo ELSE Employees.CardNo END,
                             FullName = CASE WHEN excluded.FullName <> '' THEN excluded.FullName ELSE Employees.FullName END,
@@ -442,7 +433,8 @@ namespace ARISHrms.Services
                             Designation = CASE WHEN excluded.Designation <> '' THEN excluded.Designation ELSE Employees.Designation END,
                             BasicSalary = CASE WHEN excluded.BasicSalary > 0 THEN excluded.BasicSalary ELSE Employees.BasicSalary END,
                             WageType = CASE WHEN excluded.WageType <> '' THEN excluded.WageType ELSE Employees.WageType END,
-                            Status = CASE WHEN @Status <> '' THEN @Status ELSE Employees.Status END;",
+                            Status = CASE WHEN @Status <> '' THEN @Status ELSE Employees.Status END,
+                            LeavingDate = CASE WHEN @Status <> '' THEN COALESCE(@LeavingDate, '') ELSE Employees.LeavingDate END;",
                         employees, transaction);
         }
 

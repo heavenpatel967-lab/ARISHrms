@@ -23,12 +23,21 @@ namespace ARISHrms.Models
         public decimal BasicSalary { get; set; }
         public string WageType { get; set; }
 
-        // Raw LEAVING_DT text from the DBF (diagnostics only, not stored)
-        public string LeavingRaw { get; set; }
+        // LEAVING_DT exactly as found in the DBF (blank for active employees)
+        public string LeavingDate { get; set; }
 
         // Display helpers (not stored in the database)
         public string DisplayName => (string.IsNullOrWhiteSpace(FullName) ? EmpCode : $"{EmpCode} - {FullName}") + (Status == "N" ? "  (left)" : "");
         public string DepartmentName => ARISHrms.Services.LookupNames.Department(Department);
+        public string LeavingDisplay
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(LeavingDate)) return "";
+                return ARISHrms.Services.AttendanceReportService.TryParseDate(LeavingDate, out var d)
+                    ? d.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture) : LeavingDate.Trim();
+            }
+        }
         public string CategoryName => ARISHrms.Services.LookupNames.Category(Category);
     }
 

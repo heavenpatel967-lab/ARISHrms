@@ -27,6 +27,7 @@ namespace ARISHrms.Services
     public class EmployeeColumns
     {
         public bool CodeIsStrong;
+        public List<string> NameColumns = new List<string>();
         public string Code, Card, CompCode, Name, Dept, Category, Shift, Designation, Basic, WageType, YearMonth, LeavingDate;
 
         /// <summary>How many of the useful columns were found.</summary>
@@ -205,6 +206,17 @@ namespace ARISHrms.Services
             return null;
         }
 
+        private static List<string> FindColumns(DbfTable table, params string[] aliases)
+        {
+            var found = new List<string>();
+            foreach (var alias in aliases)
+            {
+                var match = table.Fields.FirstOrDefault(f => Normalize(f.Name) == Normalize(alias));
+                if (match != null && !found.Contains(match.Name)) found.Add(match.Name);
+            }
+            return found;
+        }
+
         private static string NormalizeEmpCode(string raw)
         {
             raw = (raw ?? "").Trim();
@@ -227,7 +239,9 @@ namespace ARISHrms.Services
             Code = strongCode ?? FindColumn(table, "CODE", "ID"),
             Card = FindColumn(table, "CARDNO", "CARD", "CARDNUM", "CARDNUMBER"),
             CompCode = FindColumn(table, "COMPCODE"),
+            // Old app order per row: EMPNM, then EMP_NAME, then NAME. Other spellings are only a last resort.
             Name = FindColumn(table, "EMPNM", "EMPNAME", "NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
+            NameColumns = FindColumns(table, "EMPNM", "EMPNAME", "NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
             Dept = FindColumn(table, "DEPT", "DEPARTMENT", "DEPTCODE", "DEPTNAME"),
             Category = FindColumn(table, "CAT", "CATEGORY", "CATCODE"),
             Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE", "SHFTCD", "SHF"),
@@ -235,7 +249,7 @@ namespace ARISHrms.Services
             Basic = FindColumn(table, "BASIC", "BASICSALARY", "BASICPAY"),
             WageType = FindColumn(table, "WAGETYPE", "WAGETYP"),
             YearMonth = FindColumn(table, "YRMONTH", "YEARMONTH", "PAYMONTH"),
-            LeavingDate = FindColumn(table, "LEAVINGDT", "LEAVINGDATE", "LEAVEDT")
+            LeavingDate = FindColumn(table, "LEAVINGDT")   // exactly LEAVING_DT, like the old app
             };
         }
 
@@ -268,80 +282,87 @@ namespace ARISHrms.Services
 
         /// <summary>
         /// Old-app rule: a blank LEAVING_DT (ignoring '-', '/', '0') means the employee is active.
+        /// A leaving date that is still in the future means the person has not left yet.
         /// Returns "" when the file has no LEAVING_DT column, meaning "unknown - leave status unchanged".
         /// </summary>
         private static string StatusFromLeaving(string raw, bool hasColumn)
         {
             if (!hasColumn) return "";
             string cleaned = (raw ?? "").Replace("-", "").Replace("/", "").Replace("0", "").Trim();
-            return cleaned.Length == 0 ? "Y" : "N";
+            if (cleaned.Length == 0) return "Y";
+
+            if (AttendanceReportService.TryParseDate(raw, out var when) && when.Date > DateTime.Today)
+                return "Y";
+
+            return "N";
         }
 
         /// <summary>
-        /// Build employees from an already-loaded table, following the old Payroll Companion rules:
-        /// code = EMPCD (falls back to the card number), card = CARDNO or COMP_CODE padded to 8 digits.
-        /// When the file has several rows per employee (one per month), the latest month wins; if months
-        /// can't be read, the last row in the file wins.
+        /// One Employee per DBF row, read exactly like the old Payroll Companion's ReadEmployees loop:
+        /// code = EMPCD (else the card number), card = CARDNO (else COMP_CODE), name = EMPNM, then EMP_NAME,
+        /// then NAME - tried row by row. Nothing is collapsed here; combine rows with MergeEmployees.
         /// </summary>
-        public static List<Employee> ReadEmployees(DbfTable table)
+        public static List<Employee> ReadEmployeeRows(DbfTable table)
         {
             var cols = MapEmployeeColumns(table);
-            if (cols.Code == null && cols.Card == null && cols.CompCode == null) return new List<Employee>();
+            var rows = new List<Employee>();
+            if (cols.Code == null && cols.Card == null && cols.CompCode == null) return rows;
 
             string Get(Dictionary<string, string> row, string col) =>
                 col != null && row.TryGetValue(col, out var v) ? (v ?? "").Trim() : "";
 
-            var latest = new Dictionary<string, (long order, Employee emp)>();
-            long rowIndex = 0;
-
             foreach (var row in table.Rows)
             {
-                rowIndex++;
-
                 string card = Get(row, cols.Card);
                 if (string.IsNullOrEmpty(card)) card = Get(row, cols.CompCode);
 
                 string code = Get(row, cols.Code);
-                if (string.IsNullOrWhiteSpace(code)) code = card;      // old app: no code -> use card number
+                if (string.IsNullOrWhiteSpace(code)) code = card;       // old app: no code -> use the card number
                 code = NormalizeEmpCode(code);
                 if (string.IsNullOrEmpty(code)) continue;
 
-                if (card.Length > 0 && card.Length < 8) card = card.PadLeft(8, '0');
+                string name = "";
+                foreach (var col in cols.NameColumns)
+                {
+                    string v = Get(row, col);
+                    if (v.Length > 0) { name = v; break; }
+                }
 
-                // order = month (if readable) * 1e9 + row index, so a later month always beats an earlier one
-                long month = MonthKey(Get(row, cols.YearMonth)) ?? 0;
-                long order = month * 1_000_000_000L + rowIndex;
+                string rawLeaving = Get(row, cols.LeavingDate);
+                string status = StatusFromLeaving(rawLeaving, cols.LeavingDate != null);
 
-                if (latest.TryGetValue(code, out var existing) && existing.order > order)
-                    continue;
-
-                latest[code] = (order, new Employee
+                rows.Add(new Employee
                 {
                     EmpCode = code,
-                    CardNo = card,
-                    FullName = Get(row, cols.Name),
+                    CardNo = card,                         // padded to 8 digits after merging, like the old app
+                    FullName = name,
                     Department = Get(row, cols.Dept),
                     Category = Get(row, cols.Category),
                     Shift = Get(row, cols.Shift),
                     Designation = Get(row, cols.Designation),
                     BasicSalary = ParseDecimal(Get(row, cols.Basic)),
                     WageType = Get(row, cols.WageType),
-                    Status = StatusFromLeaving(Get(row, cols.LeavingDate), cols.LeavingDate != null),
-                    LeavingRaw = Get(row, cols.LeavingDate)
+                    Status = status,
+                    LeavingDate = status == "N" ? rawLeaving : ""
                 });
             }
 
-            return latest.Values.Select(v => v.emp).OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
+            return rows;
         }
 
+        /// <summary>Rows of one file, merged like the old app (same person on several rows fills blanks).</summary>
+        public static List<Employee> ReadEmployees(DbfTable table) => MergeEmployees(new[] { ReadEmployeeRows(table) });
+
         /// <summary>
-        /// Combine employees from several files the way the old app did: sources are given in priority
-        /// order (EMPMAS, mstsal, monsum). The first file to supply a value wins; later files only fill
-        /// blanks. An employee marked as left (N) in any file stays left.
+        /// The old app's merge, copied rule for rule. Rows are processed in the order given (EMPMAS rows, then
+        /// mstsal rows, then monsum rows). The first row creates the employee; every later row only fills blanks:
+        /// name, department, designation, category, shift, and the card number (which is also replaced when it is
+        /// "00000001" or contains "0000000"). An employee who is "left" (N) on any row stays left.
         /// </summary>
         public static List<Employee> MergeEmployees(IEnumerable<List<Employee>> sourcesInPriorityOrder)
         {
             var map = new Dictionary<string, Employee>();
+            var order = new List<string>();
 
             foreach (var source in sourcesInPriorityOrder)
             {
@@ -349,26 +370,66 @@ namespace ARISHrms.Services
                 {
                     if (!map.TryGetValue(e.EmpCode, out var cur))
                     {
-                        map[e.EmpCode] = e;
+                        map[e.EmpCode] = Clone(e);
+                        order.Add(e.EmpCode);
                         continue;
                     }
 
-                    if (string.IsNullOrWhiteSpace(cur.FullName)) cur.FullName = e.FullName;
-                    if (string.IsNullOrWhiteSpace(cur.CardNo)) cur.CardNo = e.CardNo;
-                    if (string.IsNullOrWhiteSpace(cur.Department)) cur.Department = e.Department;
-                    if (string.IsNullOrWhiteSpace(cur.Designation)) cur.Designation = e.Designation;
-                    if (string.IsNullOrWhiteSpace(cur.Category)) cur.Category = e.Category;
-                    if (string.IsNullOrWhiteSpace(cur.Shift)) cur.Shift = e.Shift;
-                    if (cur.BasicSalary <= 0) cur.BasicSalary = e.BasicSalary;
-                    if (string.IsNullOrWhiteSpace(cur.WageType)) cur.WageType = e.WageType;
+                    if (string.IsNullOrWhiteSpace(cur.FullName) && !string.IsNullOrWhiteSpace(e.FullName)) cur.FullName = e.FullName;
 
-                    if (cur.Status != "N" && e.Status == "N") cur.LeavingRaw = e.LeavingRaw;
-                    if (cur.Status == "N" || e.Status == "N") cur.Status = "N";
-                    else if (string.IsNullOrEmpty(cur.Status)) cur.Status = e.Status;
+                    if ((string.IsNullOrWhiteSpace(cur.CardNo) || cur.CardNo == "00000001" || cur.CardNo.Contains("0000000"))
+                        && !string.IsNullOrWhiteSpace(e.CardNo))
+                        cur.CardNo = e.CardNo;
+
+                    if (string.IsNullOrWhiteSpace(cur.Department) && !string.IsNullOrWhiteSpace(e.Department)) cur.Department = e.Department;
+                    if (string.IsNullOrWhiteSpace(cur.Designation) && !string.IsNullOrWhiteSpace(e.Designation)) cur.Designation = e.Designation;
+                    if (string.IsNullOrWhiteSpace(cur.Category) && !string.IsNullOrWhiteSpace(e.Category)) cur.Category = e.Category;
+                    if (string.IsNullOrWhiteSpace(cur.Shift) && !string.IsNullOrWhiteSpace(e.Shift)) cur.Shift = e.Shift;
+                    if (cur.BasicSalary <= 0 && e.BasicSalary > 0) cur.BasicSalary = e.BasicSalary;
+                    if (string.IsNullOrWhiteSpace(cur.WageType) && !string.IsNullOrWhiteSpace(e.WageType)) cur.WageType = e.WageType;
+
+                    if (cur.Status != "N" && e.Status == "N") { cur.Status = "N"; cur.LeavingDate = e.LeavingDate; }
+                    else if (string.IsNullOrEmpty(cur.Status) && e.Status == "Y") cur.Status = "Y";
                 }
             }
 
-            return map.Values.OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
+            var result = order.Select(k => map[k]).ToList();
+            foreach (var e in result)
+                if (!string.IsNullOrWhiteSpace(e.CardNo) && e.CardNo.Length < 8) e.CardNo = e.CardNo.PadLeft(8, '0');   // old app pads at the end
+
+            return result.OrderBy(e => e.EmpCode, StringComparer.Ordinal).ToList();
+        }
+
+        private static Employee Clone(Employee e) => new Employee
+        {
+            EmpCode = e.EmpCode, CardNo = e.CardNo, FullName = e.FullName, Department = e.Department, Category = e.Category,
+            Shift = e.Shift, Designation = e.Designation, BasicSalary = e.BasicSalary, WageType = e.WageType,
+            Status = e.Status, LeavingDate = e.LeavingDate
+        };
+
+        /// <summary>
+        /// The old Employee List screen replaced each person's department and category with the values from
+        /// monsum.DBF: the LAST non-blank value found in the file for that person. Blank values keep what the
+        /// master files said.
+        /// </summary>
+        public static void ApplyMonsumOverrides(IEnumerable<Employee> employees, List<Employee> monsumRows)
+        {
+            var truth = new Dictionary<string, (string dept, string cat)>();
+            foreach (var r in monsumRows)
+            {
+                if (truth.TryGetValue(r.EmpCode, out var existing))
+                    truth[r.EmpCode] = (!string.IsNullOrWhiteSpace(r.Department) ? r.Department : existing.dept,
+                                        !string.IsNullOrWhiteSpace(r.Category) ? r.Category : existing.cat);
+                else
+                    truth[r.EmpCode] = (r.Department, r.Category);
+            }
+
+            foreach (var emp in employees)
+            {
+                if (!truth.TryGetValue(emp.EmpCode, out var t)) continue;
+                if (!string.IsNullOrWhiteSpace(t.dept)) emp.Department = t.dept;
+                if (!string.IsNullOrWhiteSpace(t.cat)) emp.Category = t.cat;
+            }
         }
 
         /// <summary>
@@ -379,12 +440,16 @@ namespace ARISHrms.Services
         {
             var names = new Dictionary<string, string>();
             var cols = MapEmployeeColumns(table);
-            if (cols.Code == null || cols.Name == null) return names;
+            if (cols.Code == null || cols.NameColumns.Count == 0) return names;
 
             foreach (var row in table.Rows)
             {
                 string code = NormalizeEmpCode(row.TryGetValue(cols.Code, out var c) ? c : "");
-                string name = row.TryGetValue(cols.Name, out var n) ? (n ?? "").Trim() : "";
+                string name = "";
+                foreach (var col in cols.NameColumns)
+                {
+                    if (row.TryGetValue(col, out var n) && !string.IsNullOrWhiteSpace(n)) { name = n.Trim(); break; }
+                }
                 if (code.Length > 0 && name.Length > 0) names[code] = name;
             }
             return names;

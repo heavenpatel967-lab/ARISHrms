@@ -74,7 +74,8 @@
                     <DataGridTextColumn Header="Department" Binding="{Binding DepartmentName}" Width="150"/>
                     <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="150"/>
                     <DataGridTextColumn Header="Category" Binding="{Binding CategoryName}" Width="140"/>
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="70"/>
+                    <DataGridTextColumn Header="Left On" Binding="{Binding LeavingDisplay}" Width="110"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
