@@ -42,6 +42,7 @@ namespace ARISHrms.Services
 
         /// <summary>Codes that appear in the payroll files (mstsal/monsum) but not in EMPMAS - not imported.</summary>
         public List<string> PayrollOnlyCodes { get; } = new List<string>();
+        public int StatusFromMstsal { get; set; }
         public int BlankNameCount { get; set; }
 
         public string ToReportText()
@@ -144,7 +145,7 @@ namespace ARISHrms.Services
                     var cols = DbfReader.MapEmployeeColumns(peek);
                     info.MappedColumns = cols.Score;
 
-                    bool hasIdentity = cols.Code != null || cols.Card != null || cols.CompCode != null;
+                    bool hasIdentity = cols.Code != null || cols.Card != null;
 
                     if (info.Priority > 0 && hasIdentity)
                     {
@@ -216,20 +217,45 @@ namespace ARISHrms.Services
                 var cols = DbfReader.MapEmployeeColumns(table);
 
                 var employees = DbfReader.ReadEmployeeRows(table);
+                foreach (var r in employees) r.StatusSource = file.FileName;
                 perFile.Add(employees);
                 mappings.AppendLine(DescribeMapping(file.FileName, cols, employees.Count));
             }
 
-            // EMPMAS is the employee master. Codes that only exist in the payroll history files (mstsal / monsum)
-            // are former or cancelled records with no name - importing them only adds blank rows.
-            bool hasMaster = scan.SourceFiles.Count > 0 && scan.SourceFiles[0].Priority == 3 && perFile[0].Count > 0;
+            // Who is an employee: everyone in EMPMAS (attendance master) or mstsal (salary master).
+            // Codes that appear only in monsum (month-by-month payroll history) are not imported.
+            int empmasIdx = scan.SourceFiles.FindIndex(f => f.Priority == 3);
+            int mstsalIdx = scan.SourceFiles.FindIndex(f => f.Priority == 2);
+            bool hasMaster = (empmasIdx >= 0 && perFile[empmasIdx].Count > 0) || (mstsalIdx >= 0 && perFile[mstsalIdx].Count > 0);
 
             var merged = DbfReader.MergeEmployees(perFile);
             if (hasMaster)
             {
-                var masterCodes = new HashSet<string>(perFile[0].Select(e => e.EmpCode));
+                var masterCodes = new HashSet<string>();
+                if (empmasIdx >= 0) foreach (var r in perFile[empmasIdx]) masterCodes.Add(r.EmpCode);
+                if (mstsalIdx >= 0) foreach (var r in perFile[mstsalIdx]) masterCodes.Add(r.EmpCode);
                 scan.PayrollOnlyCodes.AddRange(merged.Where(e => !masterCodes.Contains(e.EmpCode)).Select(e => e.EmpCode));
                 merged = merged.Where(e => masterCodes.Contains(e.EmpCode)).ToList();
+            }
+
+            // Active / left comes from the salary master mstsal.DBF when it has a LEAVING_DT column: it holds the
+            // CURRENT leaving date. monsum is monthly history (old months keep old leaving dates) and EMPMAS can be
+            // stale, so they only decide for people who are not in mstsal.
+            scan.StatusFromMstsal = 0;
+            if (mstsalIdx >= 0)
+            {
+                var salByCode = perFile[mstsalIdx].Where(r => !string.IsNullOrEmpty(r.Status))
+                                                  .GroupBy(r => r.EmpCode)
+                                                  .ToDictionary(g => g.Key, g => g.ToList());
+                foreach (var emp in merged)
+                {
+                    if (!salByCode.TryGetValue(emp.EmpCode, out var rows)) continue;
+                    var leftRow = rows.FirstOrDefault(r => r.Status == "N");
+                    emp.Status = leftRow != null ? "N" : "Y";
+                    emp.LeavingDate = leftRow != null ? leftRow.LeavingDate : "";
+                    emp.StatusSource = scan.SourceFiles[mstsalIdx].FileName;
+                    scan.StatusFromMstsal++;
+                }
             }
 
             // The old Employee List replaced department and category with monsum.DBF values (last non-blank wins)
@@ -285,7 +311,7 @@ namespace ARISHrms.Services
             if (scan.PayrollOnlyCodes.Count > 0)
             {
                 mappings.AppendLine();
-                mappings.AppendLine($"Not imported: {scan.PayrollOnlyCodes.Count} code(s) appear only in the payroll files, not in EMPMAS " +
+                mappings.AppendLine($"Not imported: {scan.PayrollOnlyCodes.Count} code(s) appear only in monsum (payroll history), not in EMPMAS or mstsal " +
                                     $"(e.g. {string.Join(", ", scan.PayrollOnlyCodes.Take(8))}{(scan.PayrollOnlyCodes.Count > 8 ? ", ..." : "")}).");
             }
             if (scan.BlankNameCount > 0)
@@ -295,9 +321,10 @@ namespace ARISHrms.Services
             if (left.Count > 0)
             {
                 mappings.AppendLine();
-                mappings.AppendLine("Why employees were marked LEFT (raw LEAVING_DT text; blank/zeros = active):");
+                mappings.AppendLine($"Active / left decided by mstsal.DBF for {scan.StatusFromMstsal} employee(s).");
+                mappings.AppendLine("Why employees were marked LEFT (raw LEAVING_DT text and the file it came from):");
                 foreach (var e in left)
-                    mappings.AppendLine($"  {e.EmpCode}: LEAVING_DT = '{e.LeavingDate}'");
+                    mappings.AppendLine($"  {e.EmpCode}: LEAVING_DT = '{e.LeavingDate}'  ({e.StatusSource})");
             }
 
             mappings.AppendLine();
@@ -347,7 +374,8 @@ namespace ARISHrms.Services
                               AND NOT EXISTS (SELECT 1 FROM VillageVisits WHERE EmpCode = @code)
                               AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code)
                               AND NOT EXISTS (SELECT 1 FROM AdvanceTaken WHERE EmpCode = @code)
-                              AND NOT EXISTS (SELECT 1 FROM EmployeeRemarks WHERE EmpCode = @code);",
+                              AND NOT EXISTS (SELECT 1 FROM EmployeeRemarks WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM AbsenceMarks WHERE EmpCode = @code);",
                             new { code }, transaction);
 
                         if (deleted > 0)

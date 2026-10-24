@@ -92,6 +92,10 @@
                     </Grid.RowDefinitions>
 
                     <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="🔍 Card No / Name:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <TextBox x:Name="TxtEmpSearch" Width="140" Height="30" VerticalContentAlignment="Center" Padding="6,0" Margin="0,0,6,0"
+                                 ToolTip="Type a card number, employee code or name. Enter = pick the best match, Down arrow = open the list, Esc = clear."/>
+                        <TextBlock x:Name="TxtSearchHint" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" MinWidth="80" Margin="0,0,10,0"/>
                         <TextBlock Text="Employee:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
                         <ComboBox x:Name="CmbEmployee" Width="330" Height="30" VerticalContentAlignment="Center" Margin="0,0,15,0"
                                   DisplayMemberPath="DisplayName" SelectedValuePath="EmpCode"/>
@@ -102,25 +106,61 @@
                         <Button Content="🏃 Run Report" Click="BtnRunHistory_Click" Width="120" Height="30" Background="#2563EB" Foreground="White" FontWeight="Bold"/>
                     </WrapPanel>
 
-                    <DataGrid Grid.Row="1" x:Name="HistoryGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                    <DataGrid Grid.Row="1" x:Name="HistoryGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" SelectionMode="Single"
                               HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="1" BorderBrush="#E2E8F0" RowHeight="28">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Date" Binding="{Binding DateStr}" Width="130"/>
                             <DataGridTextColumn Header="In Time" Binding="{Binding InTime}" Width="100"/>
                             <DataGridTextColumn Header="Out Time" Binding="{Binding OutTime}" Width="100"/>
-                            <DataGridTemplateColumn Header="Status" Width="*">
+                            <DataGridTemplateColumn Header="Status" Width="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Status}" FontWeight="Bold" Foreground="{Binding StatusColor}" VerticalAlignment="Center"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+
+                            <!-- Absent days: was the leave informed? Default = Informed. Saved immediately. -->
+                            <DataGridTemplateColumn Header="Leave Type (absent days)" Width="330">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsAbsent}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <RadioButton Content="Informed" IsChecked="{Binding IsInformed, Mode=OneWay}" Click="RbInformed_Click"
+                                                         Foreground="#27AE60" FontWeight="Bold" Margin="0,0,14,0" VerticalAlignment="Center"
+                                                         GroupName="{Binding DateStr}"/>
+                                            <RadioButton Content="Without informing" IsChecked="{Binding Uninformed, Mode=OneWay}" Click="RbUninformed_Click"
+                                                         Foreground="#E74C3C" FontWeight="Bold" VerticalAlignment="Center"
+                                                         GroupName="{Binding DateStr}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Note" Binding="{Binding LeaveNote}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
 
                     <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
-                        <TextBlock x:Name="TxtHistoryInfo" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#475569" FontWeight="SemiBold"/>
-                        <Button DockPanel.Dock="Right" Content="📊 Export to Excel" Click="BtnExportHistory_Click" Width="140" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold"/>
+                        <TextBlock x:Name="TxtHistoryInfo" DockPanel.Dock="Top" Foreground="#475569" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <DatePicker x:Name="DpLeaveDate" Width="130" Height="30" Margin="0,0,8,0" ToolTip="A leave date to mark (also days not in MONDATA)"/>
+                            <ComboBox x:Name="CmbLeaveKind" Width="160" Height="30" VerticalContentAlignment="Center" Margin="0,0,8,0" SelectedIndex="0">
+                                <ComboBoxItem Content="Informed (permission)"/>
+                                <ComboBoxItem Content="Without informing"/>
+                            </ComboBox>
+                            <TextBox x:Name="TxtLeaveNote" Width="150" Height="30" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,8,0" ToolTip="Note (optional)"/>
+                            <Button Content="📌 Mark leave date" Click="BtnMarkLeave_Click" Width="140" Height="32" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                            <Button Content="📊 Export to Excel" Click="BtnExportHistory_Click" Width="140" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold"/>
+                        </WrapPanel>
                     </DockPanel>
                 </Grid>
             </TabItem>

@@ -141,13 +141,36 @@ namespace ARISHrms.Services
             return t;
         }
 
-        public static void AddTrackRecord(Report r, IList<EmployeeRemark> remarks, IList<VillageVisit> visits, LeaveReliabilityResult leave)
+        public static ReportTable AbsenceTable(IEnumerable<AbsenceMark> marks)
         {
-            var verdict = TrackRecord.Verdict(remarks, leave);
+            var t = new ReportTable
+            {
+                Headers = { "Date", "Leave Type", "Note" },
+                Widths = { 1.3, 2, 4 },
+                EmptyText = "No absent days marked."
+            };
+            foreach (var m in marks.OrderByDescending(x => x.AbsenceDate).ThenByDescending(x => x.Id))
+            {
+                t.Rows.Add(new List<ReportCell> { C(m.DateDisplay), C(m.KindLabel, m.Color, true), C(m.Note) });
+                t.RowBackgrounds.Add(m.Informed ? null : "#FDECEA");
+            }
+            return t;
+        }
+
+        public static void AddTrackRecord(Report r, IList<EmployeeRemark> remarks, IList<VillageVisit> visits, LeaveReliabilityResult leave,
+                                          IList<AbsenceMark> absences = null)
+        {
+            absences = absences ?? new List<AbsenceMark>();
+            var abs = AbsenceLogic.Summarize(absences);
+            var verdict = TrackRecord.Verdict(remarks, leave, abs);
             r.Blocks.Add(new ReportHeading { Text = "REMARKS & TRACK RECORD" });
             r.Blocks.Add(new ReportFields { Items = { ("Overall", C(verdict.Text, verdict.Color, true)), ("Summary", C(verdict.Detail)) } });
             r.Blocks.Add(new ReportDots { Label = "Village leave record (last 6)", Text = leave.Text, Dots = leave.Dots });
+            r.Blocks.Add(new ReportDots { Label = "Absences (last 6 marked)", Text = abs.Text, Dots = abs.Dots });
             r.Blocks.Add(RemarksTable(remarks));
+
+            r.Blocks.Add(new ReportHeading { Text = "ABSENT DAYS - INFORMED / WITHOUT INFORMING" });
+            r.Blocks.Add(AbsenceTable(absences));
 
             r.Blocks.Add(new ReportHeading { Text = "VILLAGE VISIT / LONG LEAVE HISTORY" });
             r.Blocks.Add(VillageVisitTable(visits));
@@ -175,7 +198,7 @@ namespace ARISHrms.Services
 
         public static Report EmployeeSummary(EmployeeHeader h, SummaryFinancials fin, string financialNote,
             IList<AdvanceTakenEntry> ticks, IList<EmployeeRemark> remarks, IList<VillageVisit> visits,
-            LeaveReliabilityResult leave, DateTime today)
+            LeaveReliabilityResult leave, DateTime today, IList<AbsenceMark> absences = null)
         {
             var r = new Report { Title = "360° EMPLOYEE SUMMARY REPORT", Subtitle = $"{h.Name}  ({h.Codes})" };
             AddEmployeeHeader(r, h);
@@ -206,14 +229,14 @@ namespace ARISHrms.Services
             r.Blocks.Add(new ReportHeading { Text = "ADVANCE TAKEN HISTORY (all dates)" });
             r.Blocks.Add(AdvanceTakenTable(ticks));
 
-            AddTrackRecord(r, remarks, visits, leave);
+            AddTrackRecord(r, remarks, visits, leave, absences);
             return r;
         }
 
         // ---------------- loan ledger ----------------
 
         public static Report LoanLedger(string employee, LoanSummary s, string note,
-            IList<EmployeeRemark> remarks, IList<VillageVisit> visits, LeaveReliabilityResult leave)
+            IList<EmployeeRemark> remarks, IList<VillageVisit> visits, LeaveReliabilityResult leave, IList<AbsenceMark> absences = null)
         {
             var r = new Report { Title = "LOAN LEDGER", Subtitle = employee };
 
@@ -259,7 +282,7 @@ namespace ARISHrms.Services
             }
             if (!string.IsNullOrWhiteSpace(note)) r.Blocks.Add(new ReportNote { Text = note });
 
-            AddTrackRecord(r, remarks, visits, leave);
+            AddTrackRecord(r, remarks, visits, leave, absences);
             return r;
         }
 
@@ -267,7 +290,7 @@ namespace ARISHrms.Services
 
         public static Report AdvanceLedger(string employee, AdvanceSummary s, double limit, IList<AdvanceLedgerRow> rows,
             IList<AdvanceTakenEntry> ticks, IList<EmployeeRemark> remarks, IList<VillageVisit> visits,
-            LeaveReliabilityResult leave, DateTime today)
+            LeaveReliabilityResult leave, DateTime today, IList<AbsenceMark> absences = null)
         {
             var r = new Report { Title = "ADVANCE LEDGER", Subtitle = employee };
 
@@ -311,7 +334,7 @@ namespace ARISHrms.Services
             r.Blocks.Add(new ReportHeading { Text = "MONTHLY ADVANCES" });
             r.Blocks.Add(t);
 
-            AddTrackRecord(r, remarks, visits, leave);
+            AddTrackRecord(r, remarks, visits, leave, absences);
             return r;
         }
     }

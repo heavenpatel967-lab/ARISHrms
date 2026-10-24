@@ -365,7 +365,8 @@ namespace ARISHrms.Views
                     RemarkStore.ForEmployee(_selected.EmpCode),
                     visits,
                     VillageVisitStore.Reliability(visits, DateTime.Today),
-                    DateTime.Today);
+                    DateTime.Today,
+                    AbsenceStore.ForEmployee(_selected.EmpCode));
                 ReportPrinter.Print(report, Window.GetWindow(this));
             }
             catch (Exception ex)

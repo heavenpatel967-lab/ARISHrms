@@ -37,6 +37,14 @@ namespace ARISHrms.Services
         public string OutTime { get; set; } = "";
         public string Status { get; set; } = "";
         public string StatusColor { get; set; } = "";
+
+        // Absent days only: was the leave informed? (default Informed; set in the History screen)
+        public string LeaveType { get; set; } = "";
+        public bool Uninformed { get; set; }
+        public string LeaveNote { get; set; } = "";
+        public bool IsAbsent => Status == "Absent";
+        public bool IsInformed => !Uninformed;
+        public string LeaveColor => Uninformed ? "#E74C3C" : "#27AE60";
     }
 
     /// <summary>

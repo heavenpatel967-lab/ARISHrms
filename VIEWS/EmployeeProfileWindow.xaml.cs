@@ -30,9 +30,24 @@ namespace ARISHrms.Views
             LoadFinancials();
             LoadLeaves();
             LoadAdvanceTaken();
+            LoadAbsences();
 
             // remarks can be added right here, and are hidden from the print-out's input area
             TrackRecord.ShowEmployee(_employee.EmpCode);
+        }
+
+        private void LoadAbsences()
+        {
+            try
+            {
+                var marks = AbsenceStore.ForEmployee(_employee.EmpCode);
+                AbsenceGrid.ItemsSource = marks.OrderByDescending(m => m.AbsenceDate).ToList();
+                TxtAbsenceCount.Text = AbsenceLogic.Summarize(marks).Text;
+            }
+            catch (Exception ex)
+            {
+                TxtAbsenceCount.Text = "Could not read absences: " + ex.Message;
+            }
         }
 
         private void LoadAdvanceTaken()
@@ -153,7 +168,8 @@ namespace ARISHrms.Views
                     RemarkStore.ForEmployee(_employee.EmpCode),
                     visits,
                     VillageVisitStore.Reliability(visits, DateTime.Today),
-                    DateTime.Today);
+                    DateTime.Today,
+                    AbsenceStore.ForEmployee(_employee.EmpCode));
 
                 ReportPrinter.Print(report, this);
             }

@@ -26,6 +26,9 @@ namespace ARISHrms.Models
         // LEAVING_DT exactly as found in the DBF (blank for active employees)
         public string LeavingDate { get; set; }
 
+        // Which DBF decided the status (diagnostics only, not stored)
+        public string StatusSource { get; set; }
+
         // Display helpers (not stored in the database)
         // "card | code - name  (left)" - what the employee drop-downs show
         public string DisplayName

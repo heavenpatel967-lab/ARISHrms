@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -18,6 +18,9 @@ namespace ARISHrms.Views
         private readonly List<DailyReportRow> _late = new List<DailyReportRow>();
         private readonly List<DailyReportRow> _absent = new List<DailyReportRow>();
         private Dictionary<string, Employee> _employees = new Dictionary<string, Employee>();
+        private List<Employee> _employeeList = new List<Employee>();
+        private List<HistoryRow> _history = new List<HistoryRow>();
+        private string _historyEmp;
 
         public ReportsView()
         {
@@ -32,9 +35,20 @@ namespace ARISHrms.Views
             try
             {
                 var all = EmployeeLookup.LoadAll();
+                _employeeList = all;
                 _employees = EmployeeLookup.LoadByKey();
                 CmbEmployee.ItemsSource = all;
                 if (all.Count > 0) CmbEmployee.SelectedIndex = 0;
+
+                // search by card number / code / name
+                EmployeeSearchBinder.Attach(CmbEmployee, TxtEmpSearch, TxtSearchHint, _employeeList, () =>
+                {
+                    HistoryGrid.ItemsSource = null;
+                    _history = new List<HistoryRow>();
+                    _historyEmp = null;
+                    TxtHistoryInfo.Text = "No employee matches your search.";
+                });
+                DpLeaveDate.SelectedDate = DateTime.Today;
             }
             catch (Exception ex)
             {
@@ -215,16 +229,87 @@ namespace ARISHrms.Views
                 var rows = AttendanceReportService.BuildHistory(path, code, DpStart.SelectedDate.Value, DpEnd.SelectedDate.Value);
                 Mouse.OverrideCursor = null;
 
-                HistoryGrid.ItemsSource = rows;
-                TxtHistoryInfo.Text = rows.Count == 0
-                    ? "No attendance data found for this employee in this date range."
-                    : $"Present {rows.Count(r => r.Status == "Present")}   Late {rows.Count(r => r.Status == "Late")}   Absent {rows.Count(r => r.Status == "Absent")}   Week Off {rows.Count(r => r.Status == "Week Off")}";
+                _history = rows;
+                _historyEmp = code;
+                ShowHistory();
             }
             catch (Exception ex)
             {
                 Mouse.OverrideCursor = null;
                 MessageBox.Show($"Could not read MONDATA: {ex.Message}", "Error");
             }
+        }
+
+        private void ShowHistory()
+        {
+            if (_historyEmp == null) return;
+            List<AbsenceMark> marks;
+            try { marks = AbsenceStore.ForEmployee(_historyEmp); }
+            catch (Exception ex) { marks = new List<AbsenceMark>(); TxtHistoryInfo.Text = "Could not read leave types: " + ex.Message; }
+
+            AbsenceLogic.Apply(_history, marks);
+            HistoryGrid.ItemsSource = null;
+            HistoryGrid.ItemsSource = _history;
+
+            if (_history.Count == 0)
+            {
+                TxtHistoryInfo.Text = "No attendance data found for this employee in this date range.";
+                return;
+            }
+
+            int absent = _history.Count(r => r.IsAbsent);
+            int without = _history.Count(r => r.IsAbsent && r.Uninformed);
+            TxtHistoryInfo.Text =
+                $"Present {_history.Count(r => r.Status == "Present")}   Late {_history.Count(r => r.Status == "Late")}   " +
+                $"Absent {absent}  (informed {absent - without}, without informing {without})   Week Off {_history.Count(r => r.Status == "Week Off")}";
+        }
+
+        private void SaveLeaveType(object sender, bool informed)
+        {
+            if (_historyEmp == null || !((sender as FrameworkElement)?.DataContext is HistoryRow row) || !row.IsAbsent) return;
+            try
+            {
+                AbsenceStore.Set(_historyEmp, row.SortDate, informed, row.LeaveNote);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save the leave type: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            ShowHistory();
+        }
+
+        private void RbInformed_Click(object sender, RoutedEventArgs e) => SaveLeaveType(sender, true);
+        private void RbUninformed_Click(object sender, RoutedEventArgs e) => SaveLeaveType(sender, false);
+
+        /// <summary>Mark any date - also a day that MONDATA does not list.</summary>
+        private void BtnMarkLeave_Click(object sender, RoutedEventArgs e)
+        {
+            string code = CmbEmployee.SelectedValue?.ToString();
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                MessageBox.Show("Please choose an employee.", "Missing employee");
+                return;
+            }
+            if (DpLeaveDate.SelectedDate == null)
+            {
+                MessageBox.Show("Please choose the leave date.", "Missing date");
+                return;
+            }
+
+            bool informed = CmbLeaveKind.SelectedIndex != 1;
+            try
+            {
+                AbsenceStore.Set(code, DpLeaveDate.SelectedDate.Value, informed, TxtLeaveNote.Text);
+                TxtLeaveNote.Clear();
+                MessageBox.Show($"{DpLeaveDate.SelectedDate.Value:dd-MMM-yyyy} saved as: {(informed ? "Informed (permission)" : "Without informing")}.",
+                    "Leave marked", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            if (_historyEmp == code) ShowHistory();
         }
 
         private void BtnExportHistory_Click(object sender, RoutedEventArgs e)
@@ -244,7 +329,7 @@ namespace ARISHrms.Views
                 using (var wb = new XLWorkbook())
                 {
                     var ws = wb.Worksheets.Add("History Report");
-                    string[] heads = { "Date", "In Time", "Out Time", "Status" };
+                    string[] heads = { "Date", "In Time", "Out Time", "Status", "Leave Type", "Note" };
                     for (int i = 0; i < heads.Length; i++) { ws.Cell(1, i + 1).Value = heads[i]; ws.Cell(1, i + 1).Style.Font.SetBold(); }
                     int r = 2;
                     foreach (var x in data)
@@ -253,6 +338,9 @@ namespace ARISHrms.Views
                         ws.Cell(r, 2).Value = x.InTime;
                         ws.Cell(r, 3).Value = x.OutTime;
                         ws.Cell(r, 4).Value = x.Status;
+                        ws.Cell(r, 5).Value = x.LeaveType;
+                        ws.Cell(r, 6).Value = x.LeaveNote;
+                        if (x.Uninformed) ws.Cell(r, 5).Style.Font.FontColor = XLColor.Red;
                         r++;
                     }
                     ws.Columns().AdjustToContents();

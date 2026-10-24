@@ -200,7 +200,8 @@ namespace ARISHrms.Views
                     _selected.DisplayName, _summary, TxtInfo.Text,
                     RemarkStore.ForEmployee(_selected.EmpCode),
                     visits,
-                    VillageVisitStore.Reliability(visits, DateTime.Today));
+                    VillageVisitStore.Reliability(visits, DateTime.Today),
+                    AbsenceStore.ForEmployee(_selected.EmpCode));
                 ReportPrinter.Print(report, Window.GetWindow(this));
             }
             catch (Exception ex)

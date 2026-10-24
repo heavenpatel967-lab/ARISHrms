@@ -103,7 +103,17 @@ namespace ARISHrms.Data
                         Text TEXT NOT NULL,
                         CreatedAt DATETIME
                     );
-                    CREATE INDEX IF NOT EXISTS IX_EmployeeRemarks_Emp ON EmployeeRemarks (EmpCode);");
+                    CREATE INDEX IF NOT EXISTS IX_EmployeeRemarks_Emp ON EmployeeRemarks (EmpCode);
+
+                    CREATE TABLE IF NOT EXISTS AbsenceMarks (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        AbsenceDate DATE NOT NULL,
+                        Informed INTEGER NOT NULL DEFAULT 1,
+                        Note TEXT,
+                        UpdatedAt DATETIME,
+                        UNIQUE(EmpCode, AbsenceDate)
+                    );");
 
                 // 5. Leaves & Village Visits
                 connection.Execute(@"

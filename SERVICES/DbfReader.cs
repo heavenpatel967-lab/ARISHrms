@@ -306,15 +306,16 @@ namespace ARISHrms.Services
         {
             var cols = MapEmployeeColumns(table);
             var rows = new List<Employee>();
-            if (cols.Code == null && cols.Card == null && cols.CompCode == null) return rows;
+            if (cols.Code == null && cols.Card == null) return rows;
 
             string Get(Dictionary<string, string> row, string col) =>
                 col != null && row.TryGetValue(col, out var v) ? (v ?? "").Trim() : "";
 
             foreach (var row in table.Rows)
             {
+                // COMP_CODE is the COMPANY code (000001 on every row in mstsal), so it is never used as a card or
+                // employee number - the old app did, which merged unrelated rows into employee 0001.
                 string card = Get(row, cols.Card);
-                if (string.IsNullOrEmpty(card)) card = Get(row, cols.CompCode);
 
                 string code = Get(row, cols.Code);
                 if (string.IsNullOrWhiteSpace(code)) code = card;       // old app: no code -> use the card number
@@ -388,7 +389,7 @@ namespace ARISHrms.Services
                     if (cur.BasicSalary <= 0 && e.BasicSalary > 0) cur.BasicSalary = e.BasicSalary;
                     if (string.IsNullOrWhiteSpace(cur.WageType) && !string.IsNullOrWhiteSpace(e.WageType)) cur.WageType = e.WageType;
 
-                    if (cur.Status != "N" && e.Status == "N") { cur.Status = "N"; cur.LeavingDate = e.LeavingDate; }
+                    if (cur.Status != "N" && e.Status == "N") { cur.Status = "N"; cur.LeavingDate = e.LeavingDate; cur.StatusSource = e.StatusSource; }
                     else if (string.IsNullOrEmpty(cur.Status) && e.Status == "Y") cur.Status = "Y";
                 }
             }
@@ -404,7 +405,7 @@ namespace ARISHrms.Services
         {
             EmpCode = e.EmpCode, CardNo = e.CardNo, FullName = e.FullName, Department = e.Department, Category = e.Category,
             Shift = e.Shift, Designation = e.Designation, BasicSalary = e.BasicSalary, WageType = e.WageType,
-            Status = e.Status, LeavingDate = e.LeavingDate
+            Status = e.Status, LeavingDate = e.LeavingDate, StatusSource = e.StatusSource
         };
 
         /// <summary>

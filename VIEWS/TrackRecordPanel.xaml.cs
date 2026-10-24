@@ -47,6 +47,7 @@ namespace ARISHrms.Views
         {
             List<EmployeeRemark> remarks = new List<EmployeeRemark>();
             LeaveReliabilityResult leave = new LeaveReliabilityResult();
+            AbsenceSummary absences = new AbsenceSummary();
 
             if (_empCode != null)
             {
@@ -54,6 +55,7 @@ namespace ARISHrms.Views
                 {
                     remarks = RemarkStore.ForEmployee(_empCode);
                     leave = LoadLeave(_empCode);
+                    absences = AbsenceLogic.Summarize(AbsenceStore.ForEmployee(_empCode));
                 }
                 catch (Exception ex)
                 {
@@ -66,8 +68,10 @@ namespace ARISHrms.Views
 
             TxtLeave.Text = leave.Text;
             IcLeaveDots.ItemsSource = leave.Dots;
+            TxtAbsences.Text = absences.Text;
+            IcAbsenceDots.ItemsSource = absences.Dots;
 
-            var verdict = ARISHrms.Services.TrackRecord.Verdict(remarks, leave);
+            var verdict = ARISHrms.Services.TrackRecord.Verdict(remarks, leave, absences);
             TxtVerdict.Text = _empCode == null ? "Select an employee" : verdict.Text;
             VerdictBadge.Background = (SolidColorBrush)new BrushConverter().ConvertFromString(_empCode == null ? "#94A3B8" : verdict.Color);
             if (_empCode != null) TxtVerdictDetail.Text = verdict.Detail;

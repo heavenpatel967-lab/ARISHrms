@@ -215,7 +215,24 @@ namespace ARISHrms.Services
         /// Based only on facts already on screen: remarks (good / bad) and the village-leave record.
         /// It is a summary for the person deciding - it does not decide anything by itself.
         /// </summary>
-        public static TrackRecordVerdict Verdict(IList<EmployeeRemark> remarks, LeaveReliabilityResult leave)
+        public static TrackRecordVerdict Verdict(IList<EmployeeRemark> remarks, LeaveReliabilityResult leave) =>
+            Verdict(remarks, leave, null);
+
+        /// <summary>Same, also weighing leaves taken without informing (from the attendance history).</summary>
+        public static TrackRecordVerdict Verdict(IList<EmployeeRemark> remarks, LeaveReliabilityResult leave, AbsenceSummary absences)
+        {
+            var v = VerdictCore(remarks, leave);
+            if (absences == null || absences.Informed + absences.Uninformed == 0) return v;
+
+            v.Detail += $"   |   absences: {absences.Text}";
+            if (v.Text == "No record yet") { v.Text = "✔ GOOD RECORD"; v.Color = "#27AE60"; }
+
+            if (absences.Uninformed >= 3) { v.Text = "⚠ CAUTION"; v.Color = "#E74C3C"; }
+            else if (absences.Uninformed > 0 && v.Text == "✔ GOOD RECORD") { v.Text = "MIXED"; v.Color = "#F39C12"; }
+            return v;
+        }
+
+        private static TrackRecordVerdict VerdictCore(IList<EmployeeRemark> remarks, LeaveReliabilityResult leave)
         {
             int good = remarks.Count(r => !r.IsBad);
             int bad = remarks.Count(r => r.IsBad);
