@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,18 +27,22 @@ namespace ARISHrms.Views
         {
             try
             {
-                using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-                {
-                    connection.Open();
-                    _employees = connection.Query<Employee>("SELECT * FROM Employees WHERE Status = 'Y' ORDER BY FullName").ToList();
-                }
+                // everyone, including employees who have left (they are marked "(left)")
+                _employees = EmployeeLookup.LoadAll();
 
                 CmbSelectEmployee.ItemsSource = _employees;
-                CmbSelectEmployee.DisplayMemberPath = "FullName";
+                CmbSelectEmployee.DisplayMemberPath = "DisplayName";
                 CmbSelectEmployee.SelectedValuePath = "EmpCode";
 
                 if (_employees.Count > 0)
                     CmbSelectEmployee.SelectedIndex = 0;
+
+                // search by card number / code / name
+                EmployeeSearchBinder.Attach(CmbSelectEmployee, TxtEmpSearch, TxtSearchHint, _employees, () =>
+                {
+                    _selectedEmpCode = null;
+                    LeaveGrid.ItemsSource = null;
+                });
             }
             catch (Exception ex)
             {

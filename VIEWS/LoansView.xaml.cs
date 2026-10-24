@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -44,6 +44,14 @@ namespace ARISHrms.Views
                 }
 
                 CmbSelectEmployee.SelectedIndex = 0;
+
+                // search by card number / code / name
+                EmployeeSearchBinder.Attach(CmbSelectEmployee, TxtEmpSearch, TxtSearchHint, _employees, () =>
+                {
+                    _selected = null;
+                    ClearScreen();
+                    TxtInfo.Text = "No employee matches your search.";
+                });
             }
             catch (Exception ex)
             {

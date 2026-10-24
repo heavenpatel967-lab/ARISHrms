@@ -14,11 +14,15 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,15" LastChildFill="False">
             <TextBlock Text="Employee Loan Ledger" FontSize="20" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center"/>
 
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <TextBlock Text="🔍 Card No / Name:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,8,0"/>
+                <TextBox x:Name="TxtEmpSearch" Width="150" Height="32" VerticalContentAlignment="Center" Padding="6,0" Margin="0,0,6,0"
+                         ToolTip="Type a card number, employee code or name. Enter = pick the best match, Down arrow = open the list, Esc = clear."/>
+                <TextBlock x:Name="TxtSearchHint" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" MinWidth="95" Margin="0,0,14,0"/>
                 <TextBlock Text="Select Employee:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,10,0"/>
-                <ComboBox x:Name="CmbSelectEmployee" Width="250" Height="32" VerticalContentAlignment="Center" 
-                          DisplayMemberPath="FullName" SelectedValuePath="EmpCode" SelectionChanged="CmbSelectEmployee_SelectionChanged"/>
-            </StackPanel>
+                <ComboBox x:Name="CmbSelectEmployee" Width="330" Height="32" VerticalContentAlignment="Center" 
+                          DisplayMemberPath="DisplayName" SelectedValuePath="EmpCode" SelectionChanged="CmbSelectEmployee_SelectionChanged"/>
+            </WrapPanel>
         </DockPanel>
 
         <!-- Summary KPI Cards -->

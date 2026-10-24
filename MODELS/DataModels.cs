@@ -27,7 +27,16 @@ namespace ARISHrms.Models
         public string LeavingDate { get; set; }
 
         // Display helpers (not stored in the database)
-        public string DisplayName => (string.IsNullOrWhiteSpace(FullName) ? EmpCode : $"{EmpCode} - {FullName}") + (Status == "N" ? "  (left)" : "");
+        // "card | code - name  (left)" - what the employee drop-downs show
+        public string DisplayName
+        {
+            get
+            {
+                string who = string.IsNullOrWhiteSpace(FullName) ? EmpCode : $"{EmpCode} - {FullName}";
+                string card = string.IsNullOrWhiteSpace(CardNo) ? "" : CardNo.Trim() + " | ";
+                return card + who + (Status == "N" ? "  (left)" : "");
+            }
+        }
         public string DepartmentName => ARISHrms.Services.LookupNames.Department(Department);
         public string LeavingDisplay
         {
