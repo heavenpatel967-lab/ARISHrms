@@ -111,35 +111,135 @@ namespace ARISHrms.Views
         {
             AdvanceGrid.ItemsSource = null;
             TrendDotsContainer.Children.Clear();
+            TakenDotsContainer.Children.Clear();
             TxtTotalAdvances.Text = "₹ 0.00";
             TxtHealth.Text = "0 / 0 Safe";
+            TxtTakenHealth.Text = "0 / 6 Months";
+            TxtTakenSummary.Text = "";
             TxtLifetimeAdvance.Text = "Total Lifetime Advance: ₹ 0.00";
             _summary = null;
+            TrackRecord.ShowEmployee(_selected?.EmpCode);
 
-            if (_selected == null || !EnsureMonsum()) return;
+            if (_selected == null) return;
 
-            _summary = _monsum.BuildAdvanceSummary(_selected.EmpCode, _selected.CardNo, CurrentLimit());
+            // ticks are kept in this app, so they show even when monsum.DBF is not available
+            List<AdvanceTakenEntry> ticks;
+            try { ticks = AdvanceTakenStore.ForEmployee(_selected.EmpCode); }
+            catch (Exception ex) { ticks = new List<AdvanceTakenEntry>(); TxtInfo.Text = "Could not read advance ticks: " + ex.Message; }
 
-            AdvanceGrid.ItemsSource = _summary.Items;
-            TxtTotalAdvances.Text = $"₹ {_summary.Total:N2}";
-            TxtLifetimeAdvance.Text = $"Total Lifetime Advance: ₹ {_summary.Total:N2}";
-            TxtHealth.Text = $"{_summary.SafeCount} / {_summary.Items.Count} Safe";
-
-            foreach (var item in _summary.Items.Skip(Math.Max(0, _summary.Items.Count - 6)))
+            bool haveMonsum = EnsureMonsum();
+            var monsumItems = new List<AdvanceItem>();
+            if (haveMonsum)
             {
-                TrendDotsContainer.Children.Add(new Ellipse
-                {
-                    Width = 14,
-                    Height = 14,
-                    Margin = new Thickness(0, 0, 6, 0),
-                    Fill = (SolidColorBrush)new BrushConverter().ConvertFromString(item.StatusColor),
-                    ToolTip = $"{item.MonthYear}: ₹ {item.AdvanceAmount:N0}"
-                });
+                _summary = _monsum.BuildAdvanceSummary(_selected.EmpCode, _selected.CardNo, CurrentLimit());
+                monsumItems = _summary.Items;
+
+                TxtTotalAdvances.Text = $"₹ {_summary.Total:N2}";
+                TxtLifetimeAdvance.Text = $"Total Lifetime Advance: ₹ {_summary.Total:N2}";
+                TxtHealth.Text = $"{_summary.SafeCount} / {_summary.Items.Count} Safe";
+
+                foreach (var item in _summary.Items.Skip(Math.Max(0, _summary.Items.Count - 6)))
+                    TrendDotsContainer.Children.Add(Dot(item.StatusColor, $"{item.MonthYear}: ₹ {item.AdvanceAmount:N0}"));
             }
 
-            TxtInfo.Text = _summary.Items.Count == 0
-                ? "No advances in monsum.DBF for this employee."
-                : "Data from monsum.DBF  |  red = above this employee's monthly limit";
+            AdvanceGrid.ItemsSource = AdvanceLedgerBuilder.Build(monsumItems, ticks);
+
+            // last 6 months: was an advance actually handed over?
+            var takenDots = TrackRecord_TakenDots(ticks);
+            foreach (var d in takenDots) TakenDotsContainer.Children.Add(Dot(d.Color, d.Month));
+            TxtTakenHealth.Text = ARISHrms.Services.TrackRecord.AdvanceTakenText(ticks, DateTime.Today);
+            TxtTakenSummary.Text = ticks.Count == 0
+                ? "No advance ticked yet."
+                : $"{ticks.Count} advance(s) ticked - last on {ticks.Max(t => t.TakenDate):dd-MMM-yyyy}";
+
+            if (haveMonsum)
+                TxtInfo.Text = _summary.Items.Count == 0
+                    ? "No advances in monsum.DBF for this employee."
+                    : "Data from monsum.DBF  |  red = above this employee's monthly limit  |  blue = added here";
+        }
+
+        private static List<SummaryDot> TrackRecord_TakenDots(List<AdvanceTakenEntry> ticks) =>
+            ARISHrms.Services.TrackRecord.AdvanceTakenDots(ticks, DateTime.Today);
+
+        private static Ellipse Dot(string color, string tip) => new Ellipse
+        {
+            Width = 14,
+            Height = 14,
+            Margin = new Thickness(0, 0, 6, 0),
+            Fill = (SolidColorBrush)new BrushConverter().ConvertFromString(color),
+            ToolTip = tip
+        };
+
+        // ---------------- advance "taken" tick + date ----------------
+        private void ChkTaken_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selected == null || !((sender as FrameworkElement)?.DataContext is AdvanceLedgerRow row)) return;
+
+            try
+            {
+                if (row.IsTaken)
+                {
+                    if (MessageBox.Show($"Remove the 'taken' tick for {row.MonthYear} ({row.TakenDate:dd-MMM-yyyy})?", "Untick advance",
+                            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                        AdvanceTakenStore.Delete(row.TakenId.Value);
+                }
+                else
+                {
+                    // default date: today if it is that month, otherwise the 1st of that month - change it in the date box
+                    DateTime date = DateTime.Today;
+                    if (row.MonthKey.Length == 6)
+                    {
+                        var first = new DateTime(int.Parse(row.MonthKey.Substring(0, 4)), int.Parse(row.MonthKey.Substring(4, 2)), 1);
+                        if (AdvanceTakenStore.MonthKeyOf(DateTime.Today) != row.MonthKey) date = first;
+                    }
+                    AdvanceTakenStore.Add(_selected.EmpCode, date, row.MonthKey, null, "");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            Refresh();
+        }
+
+        private void DpTakenDate_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_selected == null || !(sender is DatePicker dp) || !(dp.DataContext is AdvanceLedgerRow row)) return;
+            if (!row.IsTaken || dp.SelectedDate == null || dp.SelectedDate == row.TakenDate) return;
+
+            try
+            {
+                AdvanceTakenStore.UpdateDate(row.TakenId.Value, dp.SelectedDate.Value);
+                row.TakenDate = dp.SelectedDate.Value.Date;
+                // dots and "last on" text depend on the date - refresh after the picker has closed
+                Dispatcher.BeginInvoke(new Action(Refresh), System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save the date: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void BtnAddAdvanceDate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selected == null)
+            {
+                MessageBox.Show("Please select an employee first", "Warning");
+                return;
+            }
+
+            var dlg = new AddAdvanceDateWindow(_selected.DisplayName) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                AdvanceTakenStore.Add(_selected.EmpCode, dlg.TakenDate, AdvanceTakenStore.MonthKeyOf(dlg.TakenDate), dlg.Amount, dlg.Note);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            Refresh();
         }
 
         private void TxtMonthlyLimit_TextChanged(object sender, TextChangedEventArgs e)
@@ -185,7 +285,7 @@ namespace ARISHrms.Views
 
         private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
         {
-            if (_selected == null || _summary == null)
+            if (_selected == null || AdvanceGrid.ItemsSource == null)
             {
                 MessageBox.Show("Please select an employee first", "Warning");
                 return;
@@ -206,22 +306,28 @@ namespace ARISHrms.Views
                     ws.Cell("A1").Value = $"Advance Ledger - {_selected.DisplayName}";
                     ws.Cell("A1").Style.Font.SetBold();
 
-                    ws.Cell("A3").Value = "Total Advances Taken"; ws.Cell("B3").Value = _summary.Total;
-                    ws.Cell("A4").Value = "Monthly Limit";        ws.Cell("B4").Value = _summary.Limit;
+                    ws.Cell("A3").Value = "Total Advances Taken"; ws.Cell("B3").Value = _summary?.Total ?? 0;
+                    ws.Cell("A4").Value = "Monthly Limit";        ws.Cell("B4").Value = CurrentLimit();
 
                     ws.Cell("A6").Value = "Status";
                     ws.Cell("B6").Value = "Month/Year";
                     ws.Cell("C6").Value = "Advance Amount";
-                    ws.Range("A6:C6").Style.Font.SetBold();
+                    ws.Cell("D6").Value = "Taken";
+                    ws.Cell("E6").Value = "Taken On";
+                    ws.Cell("F6").Value = "Note";
+                    ws.Range("A6:F6").Style.Font.SetBold();
 
                     int row = 7;
-                    foreach (var item in _summary.Items)
+                    foreach (var item in (AdvanceGrid.ItemsSource as IEnumerable<AdvanceLedgerRow>) ?? new List<AdvanceLedgerRow>())
                     {
-                        bool safe = item.StatusColor == "#27AE60";
-                        ws.Cell(row, 1).Value = safe ? "Safe" : "High";
+                        bool high = item.StatusColor == "#E74C3C";
+                        ws.Cell(row, 1).Value = item.FromMonsum ? (high ? "High" : "Safe") : "Added here";
                         ws.Cell(row, 2).Value = item.MonthYear;
-                        ws.Cell(row, 3).Value = item.AdvanceAmount;
-                        if (!safe)
+                        if (item.AdvanceAmount.HasValue) ws.Cell(row, 3).Value = item.AdvanceAmount.Value; else ws.Cell(row, 3).Value = "-";
+                        ws.Cell(row, 4).Value = item.IsTaken ? "Yes" : "";
+                        ws.Cell(row, 5).Value = item.TakenDate.HasValue ? item.TakenDate.Value.ToString("dd-MM-yyyy") : "";
+                        ws.Cell(row, 6).Value = item.Note;
+                        if (high)
                         {
                             ws.Cell(row, 1).Style.Font.FontColor = XLColor.Red;
                             ws.Cell(row, 3).Style.Font.FontColor = XLColor.Red;

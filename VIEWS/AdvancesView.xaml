@@ -1,6 +1,7 @@
 ﻿<UserControl x:Class="ARISHrms.Views.AdvancesView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ARISHrms.Views"
              Background="#F8FAFC">
     <Grid Margin="0,10,0,0">
         <Grid.RowDefinitions>
@@ -33,6 +34,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Total Advances Taken -->
@@ -59,36 +61,94 @@
                     <TextBlock Text="Last 6 Months Trend" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
                     <StackPanel x:Name="TrendDotsContainer" Orientation="Horizontal" Margin="0,10,0,0" Height="15"/>
                 </StackPanel>
+
+                <!-- Advance taken (ticked) - last 6 months -->
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="Advance Taken (last 6 months)" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
+                    <TextBlock x:Name="TxtTakenHealth" Text="0 / 6 Months" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,5,0,0"/>
+                    <StackPanel x:Name="TakenDotsContainer" Orientation="Horizontal" Margin="0,4,0,0" Height="15"/>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Monthly Breakdown Grid -->
-        <GroupBox Grid.Row="2" Header="Monthly Advances Breakdown" FontWeight="Bold" Foreground="#0F172A">
-            <DataGrid x:Name="AdvanceGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                      Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
-                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
-                <DataGrid.Columns>
-                    <!-- Status Dot Column -->
-                    <DataGridTemplateColumn Header="Status" Width="80">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Ellipse Width="12" Height="12" Fill="{Binding StatusColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
+        <!-- Monthly Breakdown Grid + Track Record -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="360"/>
+            </Grid.ColumnDefinitions>
 
-                    <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="250"/>
-                    <DataGridTextColumn Header="Advance Amount" Binding="{Binding AdvanceAmount, StringFormat=₹ {0:N2}}" Width="250">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="#10B981"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </GroupBox>
+            <GroupBox Grid.Column="0" Header="Monthly Advances Breakdown  (tick = advance handed over, pick the real date)" FontWeight="Bold" Foreground="#0F172A">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,4,0,6" LastChildFill="False">
+                        <TextBlock x:Name="TxtTakenSummary" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#475569" FontWeight="Normal"/>
+                        <Button DockPanel.Dock="Right" Content="➕ Add advance date" Click="BtnAddAdvanceDate_Click" Width="150" Height="28"
+                                Background="#0EA5E9" Foreground="White" FontWeight="Bold"
+                                ToolTip="Record an advance given on any date - also extra advances outside the normal advance day"/>
+                    </DockPanel>
+
+                    <DataGrid x:Name="AdvanceGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              Background="White" RowHeight="34" AlternatingRowBackground="#F8FAFC"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <!-- Status Dot Column -->
+                            <DataGridTemplateColumn Header="Status" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Ellipse Width="12" Height="12" Fill="{Binding StatusColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="110"/>
+                            <DataGridTextColumn Header="Advance Amount" Binding="{Binding AmountDisplay}" Width="130">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#10B981"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- Taken tick -->
+                            <DataGridTemplateColumn Header="Taken ✔" Width="70">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsTaken, Mode=OneWay}" Click="ChkTaken_Click"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  ToolTip="Tick when the advance was actually handed over"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- Real date it was taken -->
+                            <DataGridTemplateColumn Header="Taken On (full date)" Width="160">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DatePicker SelectedDate="{Binding TakenDate, Mode=OneWay}" SelectedDateChanged="DpTakenDate_Changed"
+                                                    IsEnabled="{Binding CanEditDate}" Height="26" VerticalAlignment="Center" BorderThickness="0"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#64748B"/>
+                                        <Setter Property="FontWeight" Value="Normal"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </GroupBox>
+
+            <local:TrackRecordPanel x:Name="TrackRecord" Grid.Column="2"/>
+        </Grid>
 
         <!-- Footer Actions -->
         <DockPanel Grid.Row="3" Margin="0,15,0,0" LastChildFill="False">

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -27,6 +27,28 @@ namespace ARISHrms.Views
             ShowPersonalDetails();
             LoadFinancials();
             LoadLeaves();
+            LoadAdvanceTaken();
+
+            // remarks can be added right here, and are hidden from the print-out's input area
+            TrackRecord.ShowEmployee(_employee.EmpCode);
+        }
+
+        private void LoadAdvanceTaken()
+        {
+            try
+            {
+                var ticks = AdvanceTakenStore.ForEmployee(_employee.EmpCode);
+                IcTakenDots.ItemsSource = ARISHrms.Services.TrackRecord.AdvanceTakenDots(ticks, DateTime.Today);
+                TxtTakenHealth.Text = ARISHrms.Services.TrackRecord.AdvanceTakenText(ticks, DateTime.Today);
+                TxtLastAdvance.Text = ticks.Count == 0
+                    ? "Advance taken: none ticked yet (tick them in the Advance Ledger)"
+                    : $"Last advance taken on {ticks.Max(t => t.TakenDate):dd-MMM-yyyy}   ({ticks.Count} recorded in total)";
+            }
+            catch (Exception ex)
+            {
+                TxtTakenHealth.Text = "Data Error";
+                TxtLastAdvance.Text = "Could not read advance ticks: " + ex.Message;
+            }
         }
 
         private static string OrDash(string s) => string.IsNullOrWhiteSpace(s) ? "-" : s;
@@ -127,8 +149,12 @@ namespace ARISHrms.Views
         private void BtnPrint_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new PrintDialog();
-            if (dialog.ShowDialog() == true)
-                dialog.PrintVisual(PrintArea, $"Employee Summary - {_employee.FullName}");
+            if (dialog.ShowDialog() != true) return;
+
+            TrackRecord.AllowEditing = false;           // no input boxes on paper
+            PrintArea.UpdateLayout();
+            try { dialog.PrintVisual(PrintArea, $"Employee Summary - {_employee.FullName}"); }
+            finally { TrackRecord.AllowEditing = true; }
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();

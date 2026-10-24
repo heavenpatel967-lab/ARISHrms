@@ -82,6 +82,29 @@ namespace ARISHrms.Data
                         LimitAmount REAL NOT NULL
                     );");
 
+                // 4b. Advance "taken" ticks with the real date, and good / bad remarks
+                connection.Execute(@"
+                    CREATE TABLE IF NOT EXISTS AdvanceTaken (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        TakenDate DATE NOT NULL,
+                        MonthKey TEXT NOT NULL,
+                        Amount REAL,
+                        Note TEXT,
+                        CreatedAt DATETIME
+                    );
+                    CREATE INDEX IF NOT EXISTS IX_AdvanceTaken_Emp ON AdvanceTaken (EmpCode, MonthKey);
+
+                    CREATE TABLE IF NOT EXISTS EmployeeRemarks (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        EmpCode TEXT NOT NULL,
+                        RemarkDate DATE NOT NULL,
+                        Kind TEXT NOT NULL CHECK (Kind IN ('GOOD', 'BAD')),
+                        Text TEXT NOT NULL,
+                        CreatedAt DATETIME
+                    );
+                    CREATE INDEX IF NOT EXISTS IX_EmployeeRemarks_Emp ON EmployeeRemarks (EmpCode);");
+
                 // 5. Leaves & Village Visits
                 connection.Execute(@"
                     CREATE TABLE IF NOT EXISTS LeaveTypes (

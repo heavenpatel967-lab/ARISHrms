@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="ARISHrms.Views.DashboardView"
+<UserControl x:Class="ARISHrms.Views.DashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="#F8FAFC">
@@ -9,23 +9,17 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Title -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="Dashboard" FontSize="28" FontWeight="Bold" Foreground="#0F172A"/>
-            <TextBlock x:Name="TxtDataInfo" Text="" Foreground="#64748B" FontSize="12" Margin="0,4,0,0"/>
-        </StackPanel>
+        <TextBlock Grid.Row="0" Text="Dashboard" FontSize="28" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,20"/>
 
-        <!-- KPI Cards -->
+        <!-- KPI Cards (no money figures) -->
         <Grid Grid.Row="1" Margin="0,0,0,20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Total Employees Card -->
             <Border Grid.Column="0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
                 <StackPanel>
                     <TextBlock Text="Active Employees" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
@@ -33,32 +27,22 @@
                 </StackPanel>
             </Border>
 
-            <!-- Active Loans Card -->
             <Border Grid.Column="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
                 <StackPanel>
-                    <TextBlock Text="Employees With Loans" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
-                    <TextBlock x:Name="TxtActiveLoanCount" Text="0" FontSize="24" FontWeight="Bold" Foreground="#DC2626"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Pending Advances Card -->
-            <Border Grid.Column="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
-                <StackPanel>
-                    <TextBlock Text="Total Advances Given" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
-                    <TextBlock x:Name="TxtPendingAdvances" Text="₹ 0" FontSize="20" FontWeight="Bold" Foreground="#EA580C"/>
-                </StackPanel>
-            </Border>
-
-            <!-- On Leave Today Card -->
-            <Border Grid.Column="3" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
-                <StackPanel>
-                    <TextBlock Text="On Leave Today" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
+                    <TextBlock Text="On Village Leave Today" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
                     <TextBlock x:Name="TxtOnLeaveToday" Text="0" FontSize="24" FontWeight="Bold" Foreground="#7C3AED"/>
                 </StackPanel>
             </Border>
 
-            <!-- Docs Expiring Card -->
-            <Border Grid.Column="4" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20">
+            <Border Grid.Column="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="Late Back From Village" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
+                    <TextBlock x:Name="TxtLateReturns" Text="0" FontSize="24" FontWeight="Bold" Foreground="#DC2626"
+                               ToolTip="On village leave, expected back before today and not returned yet"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="3" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20">
                 <StackPanel>
                     <TextBlock Text="Docs Expiring Soon" Foreground="#64748B" FontSize="12" Margin="0,0,0,10"/>
                     <TextBlock x:Name="TxtDocsExpiring" Text="0" FontSize="24" FontWeight="Bold" Foreground="#F59E0B"/>
@@ -66,54 +50,25 @@
             </Border>
         </Grid>
 
-        <!-- Summary Stats -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Loans Summary -->
-            <Border Grid.Column="0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" Margin="0,0,10,0">
-                <StackPanel>
-                    <TextBlock Text="Loans Summary" FontSize="16" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,10"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Text="Pending Loans (all employees)" Foreground="#64748B" FontSize="12"/>
-                            <TextBlock x:Name="TxtTotalLoanAmount" Text="₹ 0" FontSize="16" FontWeight="Bold" Foreground="#0F172A"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Payroll data up to (YRMONTH)" Foreground="#64748B" FontSize="12"/>
-                            <TextBlock x:Name="TxtLatestMonth" Text="-" FontSize="16" FontWeight="Bold" Foreground="#0F172A"/>
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- Attendance Summary -->
-            <Border Grid.Column="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20">
-                <StackPanel>
-                    <TextBlock Text="Attendance Summary" FontSize="16" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,10"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Text="Today's Punches" Foreground="#64748B" FontSize="12"/>
-                            <TextBlock x:Name="TxtTodayPunches" Text="0" FontSize="16" FontWeight="Bold" Foreground="#0F172A"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Exceptions" Foreground="#64748B" FontSize="12"/>
-                            <TextBlock x:Name="TxtTodayExceptions" Text="0" FontSize="16" FontWeight="Bold" Foreground="#F59E0B"/>
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
-        </Grid>
+        <!-- Attendance Summary -->
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="20" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="Attendance Summary (imported punches)" FontSize="16" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,10"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Today's Records" Foreground="#64748B" FontSize="12"/>
+                        <TextBlock x:Name="TxtTodayPunches" Text="0" FontSize="16" FontWeight="Bold" Foreground="#0F172A"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Missing Punches (Exceptions)" Foreground="#64748B" FontSize="12"/>
+                        <TextBlock x:Name="TxtTodayExceptions" Text="0" FontSize="16" FontWeight="Bold" Foreground="#F59E0B"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
     </Grid>
 </UserControl>

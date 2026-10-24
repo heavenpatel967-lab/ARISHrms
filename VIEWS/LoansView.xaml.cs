@@ -50,6 +50,7 @@ namespace ARISHrms.Views
                 {
                     _selected = null;
                     ClearScreen();
+                    TrackRecord.ShowEmployee(null);
                     TxtInfo.Text = "No employee matches your search.";
                 });
             }
@@ -90,6 +91,7 @@ namespace ARISHrms.Views
         private void LoadLoanData()
         {
             ClearScreen();
+            TrackRecord.ShowEmployee(_selected?.EmpCode);
             if (!EnsureMonsum()) return;
 
             _summary = _monsum.BuildLoanSummary(_selected.EmpCode, _selected.CardNo);

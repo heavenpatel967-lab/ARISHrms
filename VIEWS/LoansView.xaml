@@ -1,6 +1,7 @@
 ﻿<UserControl x:Class="ARISHrms.Views.LoansView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ARISHrms.Views"
              Background="#F8FAFC">
     <Grid Margin="0,10,0,0">
         <Grid.RowDefinitions>
@@ -63,24 +64,33 @@
         </Border>
 
         <!-- Monthly Timeline Grid -->
-        <GroupBox Grid.Row="2" Header="Monthly Loan &amp; Deduction Timeline" FontWeight="Bold" Foreground="#0F172A">
-            <DataGrid x:Name="LoanGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                      Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
-                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="150"/>
-                    <DataGridTextColumn Header="Pending Loan Amount" Binding="{Binding PendingLoanAmount, TargetNullValue='-', StringFormat=₹ {0:N2}}" Width="250"/>
-                    <DataGridTextColumn Header="EMI Deducted" Binding="{Binding EmiDeducted, TargetNullValue='-', StringFormat=₹ {0:N2}}" Width="200">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="#EF4444"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </GroupBox>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="360"/>
+            </Grid.ColumnDefinitions>
+            <GroupBox Grid.Column="0" Header="Monthly Loan &amp; Deduction Timeline" FontWeight="Bold" Foreground="#0F172A">
+                <DataGrid x:Name="LoanGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                          Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Month / Year" Binding="{Binding MonthYear}" Width="150"/>
+                        <DataGridTextColumn Header="Pending Loan Amount" Binding="{Binding PendingLoanAmount, TargetNullValue='-', StringFormat=₹ {0:N2}}" Width="250"/>
+                        <DataGridTextColumn Header="EMI Deducted" Binding="{Binding EmiDeducted, TargetNullValue='-', StringFormat=₹ {0:N2}}" Width="200">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#EF4444"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+
+            <local:TrackRecordPanel x:Name="TrackRecord" Grid.Column="2"/>
+        </Grid>
 
         <!-- Footer Actions -->
         <DockPanel Grid.Row="3" Margin="0,15,0,0" LastChildFill="False">

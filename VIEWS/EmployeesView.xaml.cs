@@ -171,7 +171,7 @@ namespace ARISHrms.Views
                             "YES = remove them (like the old Payroll Companion, which replaced its list on every sync)\n" +
                             "NO = keep them and only add/update\n" +
                             "CANCEL = stop, change nothing\n\n" +
-                            "Employees that have village visits or documents are always kept.",
+                            "Employees that have village visits, documents, advance ticks or remarks are always kept.",
                             "Remove employees that are not in the files?",
                             MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
@@ -205,7 +205,7 @@ namespace ARISHrms.Views
                     sb.AppendLine($"Files used: {string.Join(" > ", scan.SourceFiles.Select(f => f.FileName))}");
                     sb.AppendLine($"Employees imported / updated: {employees.Count}  (active {scan.ActiveCount}, left {scan.LeftCount})");
                     if (removed > 0) sb.AppendLine($"Removed from the app: {removed}");
-                    if (kept > 0) sb.AppendLine($"Kept because they have village visits or documents: {kept}");
+                    if (kept > 0) sb.AppendLine($"Kept because they have village visits, documents, advance ticks or remarks: {kept}");
                 }
                 else
                 {

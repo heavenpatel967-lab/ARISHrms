@@ -322,7 +322,7 @@ namespace ARISHrms.Services
 
         /// <summary>
         /// Save the merged employees. With removeStale, employees that are no longer in the files are deleted -
-        /// unless they have village visits or documents, which are always kept.
+        /// unless they have village visits, documents, advance ticks or remarks, which are always kept.
         /// </summary>
         public static void SaveEmployees(DbfScanResult scan, List<Employee> merged, bool removeStale,
                                          out int removed, out int keptBecauseInUse)
@@ -345,7 +345,9 @@ namespace ARISHrms.Services
                             DELETE FROM Employees
                             WHERE EmpCode = @code
                               AND NOT EXISTS (SELECT 1 FROM VillageVisits WHERE EmpCode = @code)
-                              AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code);",
+                              AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM AdvanceTaken WHERE EmpCode = @code)
+                              AND NOT EXISTS (SELECT 1 FROM EmployeeRemarks WHERE EmpCode = @code);",
                             new { code }, transaction);
 
                         if (deleted > 0)
