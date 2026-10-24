@@ -65,7 +65,13 @@
         </GroupBox>
 
         <!-- History Grid -->
-        <GroupBox Grid.Row="2" Header="Leave History &amp; Late Tracking" FontWeight="Bold" Foreground="#0F172A">
+        <GroupBox Grid.Row="2" FontWeight="Bold" Foreground="#0F172A">
+            <GroupBox.Header>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Leave History &amp; Late Tracking (all years)"/>
+                    <TextBlock x:Name="TxtLeaveCount" Foreground="#64748B" FontWeight="Normal" Margin="12,0,0,0"/>
+                </StackPanel>
+            </GroupBox.Header>
             <DataGrid x:Name="LeaveGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                       Background="White" RowHeight="32" AlternatingRowBackground="#F8FAFC" 
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0">

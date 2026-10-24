@@ -102,7 +102,11 @@ namespace ARISHrms.Views
                     }
                 }
 
-                LeaveGrid.ItemsSource = LeaveService.GetVillageVisits(empCode, currentYear);
+                // every visit for this employee, newest first - old (CSV-imported) years too
+                var visits = VillageVisitStore.ForEmployee(empCode)
+                    .OrderByDescending(v => v.DepartureDate).ThenByDescending(v => v.Id).ToList();
+                LeaveGrid.ItemsSource = visits;
+                TxtLeaveCount.Text = visits.Count == 0 ? "No visits recorded" : $"{visits.Count} visit(s)";
             }
             catch (Exception ex)
             {
@@ -178,7 +182,73 @@ namespace ARISHrms.Views
 
         private void BtnImportCsv_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("CSV import is not implemented yet.", "Not available");
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select old village visit / long leave CSV",
+                Filter = "CSV Files (*.csv)|*.csv"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            LeaveCsvResult result;
+            try
+            {
+                result = LeaveCsvImport.Parse(LeaveCsvImport.ReadLines(dlg.FileName), DateTime.Today);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not read the CSV file.\n\nDetails: {ex.Message}", "File Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (result.Rows.Count == 0)
+            {
+                string msg = "No records could be imported.\n\nSave the sheet as \"CSV (Comma delimited)\" with columns:\n" +
+                             "Card No, Departure, Expected Return, Actual Return, Remarks\n\n" + result.ColumnInfo;
+                if (result.SkippedLines.Count > 0)
+                    msg += "\n\nRows with a card number but unreadable dates:\n" + string.Join("\n", result.SkippedLines.Take(10));
+                MessageBox.Show(msg, "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // confirm before writing - shows exactly what will happen
+            var confirm = MessageBox.Show(
+                $"Found {result.Rows.Count} village visit(s) for {result.Rows.Select(r => r.EmpCode).Distinct().Count()} employee(s).\n" +
+                (result.Skipped > 0 ? $"{result.Skipped} row(s) will be skipped (blank or unreadable dates).\n" : "") +
+                $"\n{result.ColumnInfo}\n\nVisits that are already saved are not added twice.\n\nImport now?",
+                "Import Village Visits", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            try
+            {
+                LeaveCsvImport.Save(result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save the records - nothing was imported.\n\nDetails: {ex.Message}", "Database Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var report = new System.Text.StringBuilder();
+            report.AppendLine($"Imported: {result.Imported} village visit(s)");
+            if (result.Duplicates > 0) report.AppendLine($"Already saved (not added again): {result.Duplicates}");
+            if (result.Skipped > 0)
+            {
+                report.AppendLine($"Skipped: {result.Skipped} row(s) with blank or unreadable dates");
+                foreach (var l in result.SkippedLines.Take(10)) report.AppendLine("   " + l);
+                if (result.SkippedLines.Count > 10) report.AppendLine($"   ... and {result.SkippedLines.Count - 10} more");
+            }
+            if (result.UnknownEmployees.Count > 0)
+            {
+                report.AppendLine();
+                report.AppendLine($"{result.UnknownEmployees.Count} card number(s) are not in Employee Master yet - their visits were saved and");
+                report.AppendLine("will appear once the employee is synced: " +
+                                  string.Join(", ", result.UnknownEmployees.Take(12)) + (result.UnknownEmployees.Count > 12 ? ", ..." : ""));
+            }
+
+            MessageBox.Show(report.ToString(), result.Skipped > 0 ? "Import Completed with Skips" : "Import Complete",
+                MessageBoxButton.OK, result.Skipped > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+
+            if (!string.IsNullOrEmpty(_selectedEmpCode)) LoadLeaveData(_selectedEmpCode);
         }
 
         private void BtnDeleteLeave_Click(object sender, RoutedEventArgs e)
