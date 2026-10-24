@@ -20,56 +20,62 @@ namespace ARISHrms.Views
         {
             try
             {
+                string today = DateTime.Now.ToString("yyyy-MM-dd");
+
                 using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
                 {
                     connection.Open();
 
-                    // Total Employees
-                    int totalEmployees = connection.QuerySingle<int>("SELECT COUNT(*) FROM Employees WHERE Status = 'Y'");
-                    TxtTotalEmployees.Text = totalEmployees.ToString();
+                    // Employees in this app (anyone not marked as left)
+                    TxtTotalEmployees.Text = connection.QuerySingle<int>("SELECT COUNT(*) FROM Employees WHERE Status <> 'N'").ToString();
 
-                    // Active Loans
-                    int activeLoanCount = connection.QuerySingle<int>("SELECT COUNT(DISTINCT EmpCode) FROM LoanMasters WHERE Status = 'Active'");
-                    TxtActiveLoanCount.Text = activeLoanCount.ToString();
+                    // Attendance punches imported into this app
+                    TxtTodayPunches.Text = connection.QuerySingle<int>("SELECT COUNT(*) FROM DailyAttendance WHERE WorkDate = @today", new { today }).ToString();
+                    TxtTodayExceptions.Text = connection.QuerySingle<int>("SELECT COUNT(*) FROM DailyAttendance WHERE WorkDate = @today AND IsException = 1", new { today }).ToString();
 
-                    // Pending Advances
-                    int pendingAdvances = connection.QuerySingle<int>("SELECT COUNT(*) FROM AdvanceLedgers WHERE IsRecovered = 0");
-                    TxtPendingAdvances.Text = pendingAdvances.ToString();
-
-                    // Total Loan Amount
-                    var totalLoanAmount = connection.QuerySingleOrDefault<decimal?>(
-                        "SELECT SUM(LoanAmount) FROM LoanMasters WHERE Status = 'Active'") ?? 0;
-                    TxtTotalLoanAmount.Text = $"₹ {totalLoanAmount:N0}";
-
-                    // Loans in Arrears
-                    int loansInArrears = connection.QuerySingle<int>(
-                        "SELECT COUNT(DISTINCT LoanId) FROM LoanLedgers WHERE IsInArrears = 1");
-                    TxtLoansInArrears.Text = loansInArrears.ToString();
-
-                    // Today's Punches
-                    string today = DateTime.Now.ToString("yyyy-MM-dd");
-                    int todayPunches = connection.QuerySingle<int>(
-                        $"SELECT COUNT(*) FROM DailyAttendance WHERE WorkDate = '{today}'");
-                    TxtTodayPunches.Text = todayPunches.ToString();
-
-                    // Today's Exceptions
-                    int todayExceptions = connection.QuerySingle<int>(
-                        $"SELECT COUNT(*) FROM DailyAttendance WHERE WorkDate = '{today}' AND IsException = 1");
-                    TxtTodayExceptions.Text = todayExceptions.ToString();
-
-                    // Docs Expiring Soon
-                    var expiringDocs = DocumentService.GetExpiringDocuments(30);
-                    TxtDocsExpiring.Text = expiringDocs.Count.ToString();
-
-                    // On Leave Today (approximate - check if return date is today or later)
-                    int onLeaveToday = connection.QuerySingle<int>(
-                        $"SELECT COUNT(*) FROM VillageVisits WHERE DepartureDate <= '{today}' AND (ActualReturn IS NULL OR ActualReturn > '{today}')");
-                    TxtOnLeaveToday.Text = onLeaveToday.ToString();
+                    // Leave tracking
+                    TxtOnLeaveToday.Text = connection.QuerySingle<int>(
+                        "SELECT COUNT(*) FROM VillageVisits WHERE DepartureDate <= @today AND (ActualReturn IS NULL OR ActualReturn > @today)", new { today }).ToString();
                 }
+
+                TxtDocsExpiring.Text = DocumentService.GetExpiringDocuments(30).Count.ToString();
+
+                LoadPayrollFigures();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading dashboard data: {ex.Message}", "Error");
+            }
+        }
+
+        /// <summary>Factory-wide loan and advance totals from EasyPay's monsum.DBF.</summary>
+        private void LoadPayrollFigures()
+        {
+            TxtActiveLoanCount.Text = "-";
+            TxtPendingAdvances.Text = "-";
+            TxtTotalLoanAmount.Text = "-";
+            TxtLatestMonth.Text = "-";
+
+            string path = DbfSource.Find("monsum");
+            if (path == null)
+            {
+                TxtDataInfo.Text = "Loan and advance figures need monsum.DBF. Use Employee Master -> Sync DBFS Folder to choose your DBFS folder.";
+                return;
+            }
+
+            try
+            {
+                var totals = MonsumData.Load(path).BuildFactoryTotals();
+
+                TxtActiveLoanCount.Text = totals.EmployeesWithLoans.ToString("N0");
+                TxtPendingAdvances.Text = $"₹ {totals.TotalAdvances:N0}";
+                TxtTotalLoanAmount.Text = $"₹ {totals.PendingLoans:N0}";
+                TxtLatestMonth.Text = string.IsNullOrEmpty(totals.LatestMonth) ? "-" : totals.LatestMonth;
+                TxtDataInfo.Text = "Loan and advance figures are read from monsum.DBF in your DBFS folder.";
+            }
+            catch (Exception ex)
+            {
+                TxtDataInfo.Text = "Could not read monsum.DBF: " + ex.Message;
             }
         }
     }

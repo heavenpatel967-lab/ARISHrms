@@ -116,6 +116,82 @@ namespace ARISHrms.Services
             return table;
         }
 
+        /// <summary>
+        /// Streams a DBF file row by row without keeping it in memory - for big files such as the daily
+        /// attendance file. Only the requested columns are extracted (names are matched ignoring case).
+        /// The callback receives a dictionary that is reused between rows, so copy anything you keep.
+        /// Return false from the callback to stop early. Returns the column list found in the header.
+        /// </summary>
+        public static List<DbfField> ForEachRow(string path, IEnumerable<string> columns, Func<Dictionary<string, string>, bool> onRow)
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 1 << 16);
+
+            long fileLen = fs.Length;
+            if (fileLen < 33)
+                throw new InvalidDataException("The file is too small to be a DBF file.");
+
+            var head = new byte[32];
+            fs.ReadExactly(head, 0, 32);
+
+            int headerLength = BitConverter.ToUInt16(head, 8);
+            int recordLength = BitConverter.ToUInt16(head, 10);
+            if (headerLength < 33 || headerLength > fileLen || recordLength < 2)
+                throw new InvalidDataException("The file header is not a valid DBF header.");
+
+            var header = new byte[headerLength];
+            Array.Copy(head, header, 32);
+            fs.ReadExactly(header, 32, headerLength - 32);
+
+            var encoding = Encoding.Latin1;
+            var fields = new List<DbfField>();
+            var offsets = new List<int>();
+            int pos = 32, offset = 1;
+            while (pos + 32 <= headerLength && header[pos] != 0x0D)
+            {
+                string name = encoding.GetString(header, pos, 11).Split('\0')[0].Trim();
+                fields.Add(new DbfField { Name = name, Type = (char)header[pos + 11], Length = header[pos + 16] });
+                offsets.Add(offset);
+                offset += header[pos + 16];
+                pos += 32;
+            }
+
+            if (fields.Count == 0 || pos >= headerLength || header[pos] != 0x0D)
+                throw new InvalidDataException("No column definitions were found - this is not a standard DBF file.");
+
+            var wanted = new HashSet<string>(columns.Select(c => c.ToUpperInvariant()));
+            var picks = new List<(string name, int offset, int length)>();
+            for (int f = 0; f < fields.Count; f++)
+                if (wanted.Contains(fields[f].Name.ToUpperInvariant()))
+                    picks.Add((fields[f].Name.ToUpperInvariant(), offsets[f], fields[f].Length));
+
+            long possible = (fileLen - headerLength) / recordLength;
+            int declared = BitConverter.ToInt32(head, 4);
+            long recordCount = (declared <= 0 || declared > possible) ? possible : declared;
+
+            var rec = new byte[recordLength];
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            for (long i = 0; i < recordCount; i++)
+            {
+                try { fs.ReadExactly(rec, 0, recordLength); }
+                catch (EndOfStreamException) { break; }
+
+                if (rec[0] == 0x2A) continue; // deleted
+
+                row.Clear();
+                foreach (var (name, off, len) in picks)
+                {
+                    int l = Math.Min(len, recordLength - off);
+                    row[name] = l > 0 ? encoding.GetString(rec, off, l).Trim('\0', ' ', '\t') : "";
+                }
+
+                if (!onRow(row)) break;
+            }
+
+            return fields;
+        }
+
         private static string Normalize(string s) =>
             (s ?? "").Replace("_", "").Replace(" ", "").ToUpperInvariant();
 

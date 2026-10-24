@@ -250,7 +250,7 @@ namespace ARISHrms.Services
 
         /// <summary>
         /// Save the merged employees. With removeStale, employees that are no longer in the files are deleted -
-        /// unless they have loans, advances, village visits, documents or payslips, which are always kept.
+        /// unless they have village visits or documents, which are always kept.
         /// </summary>
         public static void SaveEmployees(DbfScanResult scan, List<Employee> merged, bool removeStale,
                                          out int removed, out int keptBecauseInUse)
@@ -272,11 +272,8 @@ namespace ARISHrms.Services
                         int deleted = connection.Execute(@"
                             DELETE FROM Employees
                             WHERE EmpCode = @code
-                              AND NOT EXISTS (SELECT 1 FROM LoanMasters WHERE EmpCode = @code)
-                              AND NOT EXISTS (SELECT 1 FROM AdvanceLedgers WHERE EmpCode = @code)
                               AND NOT EXISTS (SELECT 1 FROM VillageVisits WHERE EmpCode = @code)
-                              AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code)
-                              AND NOT EXISTS (SELECT 1 FROM SalarySlips WHERE EmpCode = @code);",
+                              AND NOT EXISTS (SELECT 1 FROM EmployeeDocuments WHERE EmpCode = @code);",
                             new { code }, transaction);
 
                         if (deleted > 0)

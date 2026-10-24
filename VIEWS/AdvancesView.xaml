@@ -40,7 +40,7 @@
                 <!-- Set Monthly Limit -->
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Set Monthly Limit (₹)" Foreground="#DBEAFE" FontWeight="SemiBold" FontSize="12"/>
-                    <TextBox x:Name="TxtMonthlyLimit" Text="5000" Width="100" Height="28" HorizontalAlignment="Left" Margin="0,5,0,0" 
+                    <TextBox x:Name="TxtMonthlyLimit" Text="5000" TextChanged="TxtMonthlyLimit_TextChanged" Width="100" Height="28" HorizontalAlignment="Left" Margin="0,5,0,0" 
                              Background="Transparent" Foreground="#FCD34D" FontWeight="Bold" FontSize="18" BorderThickness="0,0,0,2" BorderBrush="#FCD34D"/>
                 </StackPanel>
 
@@ -88,12 +88,13 @@
 
         <!-- Footer Actions -->
         <DockPanel Grid.Row="3" Margin="0,15,0,0" LastChildFill="False">
-            <TextBlock x:Name="TxtLifetimeAdvance" Text="Total Lifetime Advance: ₹ 0.00" FontWeight="Bold" Foreground="#475569" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+            <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtLifetimeAdvance" Text="Total Lifetime Advance: ₹ 0.00" FontWeight="Bold" Foreground="#475569"/>
+                <TextBlock x:Name="TxtInfo" Text="" Foreground="#64748B" FontSize="11" Margin="0,2,0,0"/>
+            </StackPanel>
 
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                <TextBlock Text="Amount (₹):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,8,0"/>
-                <TextBox x:Name="TxtAdvanceAmount" Width="100" Height="34" VerticalContentAlignment="Center" Padding="5,0" Margin="0,0,10,0"/>
-                <Button Content="➕ Request Advance" Click="BtnRequestAdvance_Click" Width="150" Height="34" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,20,0"/>
+                <Button Content="📥 Import Limits CSV" Click="BtnImportLimits_Click" Width="150" Height="34" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="130" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📄 Save as PDF" Click="BtnSavePdf_Click" Width="130" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
             </StackPanel>

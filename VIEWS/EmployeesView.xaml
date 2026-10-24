@@ -71,9 +71,9 @@
                     <DataGridTextColumn Header="Card No" Binding="{Binding CardNo}" Width="90"/>
                     <DataGridTextColumn Header="Emp Code" Binding="{Binding EmpCode}" Width="90"/>
                     <DataGridTextColumn Header="Employee Name" Binding="{Binding FullName}" Width="250"/>
-                    <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="150"/>
+                    <DataGridTextColumn Header="Department" Binding="{Binding DepartmentName}" Width="150"/>
                     <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="150"/>
-                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"/>
+                    <DataGridTextColumn Header="Category" Binding="{Binding CategoryName}" Width="140"/>
                     <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
                 </DataGrid.Columns>
             </DataGrid>

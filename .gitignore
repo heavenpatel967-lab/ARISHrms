@@ -361,3 +361,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# ---- ARIS HRMS runtime data: contains employee information, never commit ----
+ArisHRMS.db
+ArisHRMS.db-*
+DbfScanReport_*.txt
+/Employees/
+*.dbf
+*.DBF
+*.ddd
+*.ren

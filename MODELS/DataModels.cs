@@ -17,6 +17,11 @@ namespace ARISHrms.Models
         // From the payroll DBF (monsum.dbf: BASIC / WAGE_TYPE)
         public decimal BasicSalary { get; set; }
         public string WageType { get; set; }
+
+        // Display helpers (not stored in the database)
+        public string DisplayName => (string.IsNullOrWhiteSpace(FullName) ? EmpCode : $"{EmpCode} - {FullName}") + (Status == "N" ? "  (left)" : "");
+        public string DepartmentName => ARISHrms.Services.LookupNames.Department(Department);
+        public string CategoryName => ARISHrms.Services.LookupNames.Category(Category);
     }
 
     public class RawPunch

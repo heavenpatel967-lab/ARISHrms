@@ -1,0 +1,129 @@
+<UserControl x:Class="ARISHrms.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F8FAFC">
+    <Grid Margin="0,10,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Attendance Reports (from EasyPay MONDATA.DBF)" FontSize="20" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,0,12"/>
+
+        <!-- Data file -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Left" Text="Data file (MONDATA):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,10,0"/>
+                <Button DockPanel.Dock="Right" Content="📂 Browse" Click="BtnBrowse_Click" Width="100" Height="30" Margin="10,0,0,0" Background="#E2E8F0" Foreground="#0F172A" FontWeight="SemiBold"/>
+                <TextBox x:Name="TxtMonDataPath" Height="30" VerticalContentAlignment="Center" Padding="6,0" IsReadOnly="False"/>
+            </DockPanel>
+        </Border>
+
+        <TabControl Grid.Row="2" x:Name="Tabs">
+
+            <!-- ============ Daily ============ -->
+            <TabItem Header="🚨 Daily Late / Absent">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="Date:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <DatePicker x:Name="DpReportDate" Width="140" Height="30" Margin="0,0,15,0"/>
+                        <Button Content="🏃 Run Report" Click="BtnRunDaily_Click" Width="120" Height="30" Background="#2563EB" Foreground="White" FontWeight="Bold" Margin="0,0,20,0"/>
+                        <TextBlock Text="🔍 Search:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <TextBox x:Name="TxtDailySearch" Width="200" Height="30" VerticalContentAlignment="Center" Padding="6,0" TextChanged="TxtDailySearch_TextChanged"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <GroupBox x:Name="GrpLate" Grid.Column="0" Header="🚨 Late Punching (after 08:32)" FontWeight="Bold">
+                            <DataGrid x:Name="LateGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0" RowHeight="28">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Card No" Binding="{Binding CardNumber}" Width="90"/>
+                                    <DataGridTextColumn Header="Emp Code" Binding="{Binding EmployeeCode}" Width="80"/>
+                                    <DataGridTextColumn Header="Employee Name" Binding="{Binding EmployeeName}" Width="*"/>
+                                    <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="110"/>
+                                    <DataGridTextColumn Header="Punch Time" Binding="{Binding PunchTimeStr}" Width="85"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+
+                        <GroupBox x:Name="GrpAbsent" Grid.Column="2" Header="❌ Absent Employees" FontWeight="Bold">
+                            <DataGrid x:Name="AbsentGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="0" RowHeight="28">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Card No" Binding="{Binding CardNumber}" Width="90"/>
+                                    <DataGridTextColumn Header="Emp Code" Binding="{Binding EmployeeCode}" Width="80"/>
+                                    <DataGridTextColumn Header="Employee Name" Binding="{Binding EmployeeName}" Width="*"/>
+                                    <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="110"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+                    </Grid>
+
+                    <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+                        <TextBlock x:Name="TxtDailyInfo" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#475569" FontWeight="SemiBold"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="📊 Export Late" Click="BtnExportLate_Click" Width="120" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                            <Button Content="📊 Export Absent" Click="BtnExportAbsent_Click" Width="130" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ============ History ============ -->
+            <TabItem Header="📅 Employee History">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="Employee:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="CmbEmployee" Width="260" Height="30" VerticalContentAlignment="Center" Margin="0,0,15,0"
+                                  DisplayMemberPath="DisplayName" SelectedValuePath="EmpCode"/>
+                        <TextBlock Text="From:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <DatePicker x:Name="DpStart" Width="130" Height="30" Margin="0,0,12,0"/>
+                        <TextBlock Text="To:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                        <DatePicker x:Name="DpEnd" Width="130" Height="30" Margin="0,0,15,0"/>
+                        <Button Content="🏃 Run Report" Click="BtnRunHistory_Click" Width="120" Height="30" Background="#2563EB" Foreground="White" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="1" x:Name="HistoryGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E2E8F0" BorderThickness="1" BorderBrush="#E2E8F0" RowHeight="28">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Date" Binding="{Binding DateStr}" Width="130"/>
+                            <DataGridTextColumn Header="In Time" Binding="{Binding InTime}" Width="100"/>
+                            <DataGridTextColumn Header="Out Time" Binding="{Binding OutTime}" Width="100"/>
+                            <DataGridTemplateColumn Header="Status" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Status}" FontWeight="Bold" Foreground="{Binding StatusColor}" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+                        <TextBlock x:Name="TxtHistoryInfo" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#475569" FontWeight="SemiBold"/>
+                        <Button DockPanel.Dock="Right" Content="📊 Export to Excel" Click="BtnExportHistory_Click" Width="140" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold"/>
+                    </DockPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

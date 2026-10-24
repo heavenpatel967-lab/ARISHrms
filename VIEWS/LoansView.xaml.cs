@@ -1,24 +1,26 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using ARISHrms.Data;
 using ARISHrms.Models;
 using ARISHrms.Services;
-using Microsoft.Data.Sqlite;
-using Dapper;
 using ClosedXML.Excel;
-using System.Linq;
 
 namespace ARISHrms.Views
 {
+    /// <summary>
+    /// Loan ledger for one employee. Nothing is typed in here: the figures come from EasyPay's
+    /// monsum.DBF (PAID_LOAN, LOAN_REC, LOAN_DED), exactly like the old ARIS Payroll Companion.
+    /// </summary>
     public partial class LoansView : UserControl
     {
         private List<Employee> _employees = new List<Employee>();
-        private string _selectedEmpCode;
+        private MonsumData _monsum;
+        private Employee _selected;
+        private LoanSummary _summary;
 
         public LoansView()
         {
@@ -30,18 +32,18 @@ namespace ARISHrms.Views
         {
             try
             {
-                using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-                {
-                    connection.Open();
-                    _employees = connection.Query<Employee>("SELECT * FROM Employees WHERE Status = 'Y' ORDER BY FullName").ToList();
-                }
-
+                _employees = EmployeeLookup.LoadAll();
                 CmbSelectEmployee.ItemsSource = _employees;
-                CmbSelectEmployee.DisplayMemberPath = "FullName";
+                CmbSelectEmployee.DisplayMemberPath = "DisplayName";
                 CmbSelectEmployee.SelectedValuePath = "EmpCode";
 
-                if (_employees.Count > 0)
-                    CmbSelectEmployee.SelectedIndex = 0;
+                if (_employees.Count == 0)
+                {
+                    TxtInfo.Text = "No employees yet. Use Employee Master -> Sync DBFS Folder.";
+                    return;
+                }
+
+                CmbSelectEmployee.SelectedIndex = 0;
             }
             catch (Exception ex)
             {
@@ -49,102 +51,79 @@ namespace ARISHrms.Views
             }
         }
 
+        private bool EnsureMonsum()
+        {
+            string path = DbfSource.Find("monsum");
+            if (path == null)
+            {
+                TxtInfo.Text = "monsum.DBF not found. " + DbfSource.NotFoundHelp.Replace("\n\n", " ").Replace("\n", " ");
+                return false;
+            }
+
+            try
+            {
+                _monsum = MonsumData.Load(path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                TxtInfo.Text = "Could not read monsum.DBF: " + ex.Message;
+                return false;
+            }
+        }
+
         private void CmbSelectEmployee_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (CmbSelectEmployee.SelectedValue == null)
-                return;
-
-            _selectedEmpCode = CmbSelectEmployee.SelectedValue.ToString();
-            LoadLoanData(_selectedEmpCode);
+            _selected = CmbSelectEmployee.SelectedItem as Employee;
+            if (_selected == null) return;
+            LoadLoanData();
         }
 
-        private void LoadLoanData(string empCode)
+        private void LoadLoanData()
         {
-            try
+            ClearScreen();
+            if (!EnsureMonsum()) return;
+
+            _summary = _monsum.BuildLoanSummary(_selected.EmpCode, _selected.CardNo);
+
+            LoanGrid.ItemsSource = _summary.Ledger;
+            TxtTotalApproved.Text = $"₹ {_summary.TotalApproved:N2}";
+            TxtTotalEmi.Text = $"₹ {_summary.TotalRecovered:N2}";
+            TxtOutstanding.Text = $"₹ {_summary.Outstanding:N2}";
+            TxtHealth.Text = $"{_summary.MonthsPaid} / {_summary.MonthsTotal} Paid";
+
+            HealthBarContainer.Children.Clear();
+            foreach (var dot in _summary.Last6)
             {
-                var loans = LoanService.GetActiveLoansByEmployee(empCode);
-                var ledgers = LoanService.GetLedgersForEmployee(empCode);
-
-                LoanGrid.ItemsSource = ledgers;
-
-                decimal totalApproved = loans.Sum(l => l.LoanAmount);
-                decimal totalEmi = ledgers.Sum(l => l.EmiDeducted ?? 0);
-                decimal outstanding = loans.Sum(l => LoanService.GetOutstandingBalance(l.Id, empCode));
-
-                TxtTotalApproved.Text = $"₹ {totalApproved:N2}";
-                TxtTotalEmi.Text = $"₹ {totalEmi:N2}";
-                TxtOutstanding.Text = $"₹ {outstanding:N2}";
-
-                // Repayment health: months fully paid vs. total scheduled months
-                int totalMonths = ledgers.Count;
-                int paidMonths = ledgers.Count(l => (l.EmiDeducted ?? 0) >= l.MonthlyEMI && l.MonthlyEMI > 0);
-                TxtHealth.Text = $"{paidMonths} / {totalMonths} Paid";
-
-                HealthBarContainer.Children.Clear();
-                for (int i = 0; i < Math.Min(totalMonths, 36); i++)
+                HealthBarContainer.Children.Add(new Rectangle
                 {
-                    bool paid = (ledgers[i].EmiDeducted ?? 0) >= ledgers[i].MonthlyEMI;
-                    HealthBarContainer.Children.Add(new Rectangle
-                    {
-                        Width = 6,
-                        Height = 10,
-                        Margin = new Thickness(0, 0, 2, 0),
-                        Fill = new SolidColorBrush(paid ? Color.FromRgb(0x10, 0xB9, 0x81) : Color.FromRgb(0x47, 0x55, 0x69))
-                    });
-                }
+                    Width = 18,
+                    Height = 8,
+                    Margin = new Thickness(0, 0, 4, 0),
+                    RadiusX = 2,
+                    RadiusY = 2,
+                    Fill = new SolidColorBrush(dot.Good ? Color.FromRgb(0x27, 0xAE, 0x60) : Color.FromRgb(0xE7, 0x4C, 0x3C)),
+                    ToolTip = $"{dot.Month}: {(dot.Good ? "EMI deducted" : "EMI missed")}"
+                });
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading loan data: {ex.Message}", "Error");
-            }
+
+            TxtInfo.Text = _summary.Ledger.Count == 0
+                ? "No loan activity in monsum.DBF for this employee."
+                : $"Data from monsum.DBF  |  Total EMI deducted: ₹ {_summary.TotalEmiDeducted:N2}";
         }
 
-        private void BtnCreateLoan_Click(object sender, RoutedEventArgs e)
+        private void ClearScreen()
         {
-            if (string.IsNullOrEmpty(_selectedEmpCode))
-            {
-                MessageBox.Show("Please select an employee first", "Warning");
-                return;
-            }
-
-            if (!decimal.TryParse(TxtLoanAmount.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) || amount <= 0)
-            {
-                MessageBox.Show("Please enter a valid loan amount", "Warning");
-                return;
-            }
-
-            if (!int.TryParse(TxtLoanTenure.Text, out var tenure) || tenure <= 0)
-            {
-                MessageBox.Show("Please enter a valid number of months", "Warning");
-                return;
-            }
-
-            if (!decimal.TryParse(TxtLoanRate.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var rate) || rate < 0)
-            {
-                MessageBox.Show("Please enter a valid interest rate (0 or more)", "Warning");
-                return;
-            }
-
-            try
-            {
-                decimal emi = LoanService.CalculateEMI(amount, rate, tenure);
-                LoanService.CreateLoan(_selectedEmpCode, DateTime.Now, amount, tenure, rate);
-
-                MessageBox.Show($"Loan created. Monthly EMI: ₹ {emi:N2}", "Success");
-
-                TxtLoanAmount.Clear();
-                TxtLoanTenure.Clear();
-                LoadLoanData(_selectedEmpCode);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating loan: {ex.Message}", "Error");
-            }
+            LoanGrid.ItemsSource = null;
+            TxtTotalApproved.Text = TxtTotalEmi.Text = TxtOutstanding.Text = "₹ 0.00";
+            TxtHealth.Text = "0 / 0 Paid";
+            HealthBarContainer.Children.Clear();
+            _summary = null;
         }
 
         private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_selectedEmpCode))
+            if (_selected == null || _summary == null)
             {
                 MessageBox.Show("Please select an employee first", "Warning");
                 return;
@@ -152,50 +131,43 @@ namespace ARISHrms.Views
 
             try
             {
-                var loans = LoanService.GetActiveLoansByEmployee(_selectedEmpCode);
-
-                using (var workbook = new XLWorkbook())
+                var dlg = new Microsoft.Win32.SaveFileDialog
                 {
-                    var worksheet = workbook.Worksheets.Add("Loans");
+                    Filter = "Excel Workbook|*.xlsx",
+                    FileName = $"LoanLedger_{_selected.EmpCode}.xlsx"
+                };
+                if (dlg.ShowDialog() != true) return;
 
-                    worksheet.Cell("A1").Value = "Loan ID";
-                    worksheet.Cell("B1").Value = "Loan Date";
-                    worksheet.Cell("C1").Value = "Loan Amount";
-                    worksheet.Cell("D1").Value = "Tenure (Months)";
-                    worksheet.Cell("E1").Value = "Interest Rate %";
-                    worksheet.Cell("F1").Value = "Monthly EMI";
-                    worksheet.Cell("G1").Value = "Outstanding Balance";
-                    worksheet.Cell("H1").Value = "Status";
+                using (var wb = new XLWorkbook())
+                {
+                    var ws = wb.Worksheets.Add("Loan Ledger");
+                    ws.Cell("A1").Value = $"Loan Ledger - {_selected.DisplayName}";
+                    ws.Cell("A1").Style.Font.SetBold();
 
-                    int row = 2;
-                    foreach (var loan in loans)
+                    ws.Cell("A3").Value = "Total Loan Given";   ws.Cell("B3").Value = _summary.TotalApproved;
+                    ws.Cell("A4").Value = "Recovered So Far";   ws.Cell("B4").Value = _summary.TotalRecovered;
+                    ws.Cell("A5").Value = "Outstanding";        ws.Cell("B5").Value = _summary.Outstanding;
+                    ws.Cell("A6").Value = "Total EMI Deducted"; ws.Cell("B6").Value = _summary.TotalEmiDeducted;
+
+                    ws.Cell("A8").Value = "Month / Year";
+                    ws.Cell("B8").Value = "Pending Loan Amount";
+                    ws.Cell("C8").Value = "EMI Deducted";
+                    ws.Range("A8:C8").Style.Font.SetBold();
+
+                    int row = 9;
+                    foreach (var item in _summary.Ledger)
                     {
-                        decimal outstanding = LoanService.GetOutstandingBalance(loan.Id, _selectedEmpCode);
-
-                        worksheet.Cell($"A{row}").Value = loan.Id;
-                        worksheet.Cell($"B{row}").Value = loan.LoanDate.ToString("dd-MM-yyyy");
-                        worksheet.Cell($"C{row}").Value = loan.LoanAmount;
-                        worksheet.Cell($"D{row}").Value = loan.TenureMonths;
-                        worksheet.Cell($"E{row}").Value = loan.InterestRate;
-                        worksheet.Cell($"F{row}").Value = loan.MonthlyEMI;
-                        worksheet.Cell($"G{row}").Value = outstanding;
-                        worksheet.Cell($"H{row}").Value = loan.Status;
+                        ws.Cell(row, 1).Value = item.MonthYear;
+                        if (item.PendingLoanAmount.HasValue) ws.Cell(row, 2).Value = item.PendingLoanAmount.Value; else ws.Cell(row, 2).Value = "-";
+                        if (item.EmiDeducted.HasValue) ws.Cell(row, 3).Value = item.EmiDeducted.Value; else ws.Cell(row, 3).Value = "-";
                         row++;
                     }
 
-                    if (row > 2)
-                    {
-                        var table = worksheet.Range($"A1:H{row - 1}").CreateTable();
-                        table.Theme = XLTableTheme.TableStyleMedium2;
-                    }
-
-                    worksheet.Columns().AdjustToContents();
-
-                    string fileName = $"Loans_{_selectedEmpCode}_{DateTime.Now:yyyyMMdd}.xlsx";
-                    workbook.SaveAs(fileName);
-
-                    MessageBox.Show($"Loan data exported to {fileName}", "Success");
+                    ws.Columns().AdjustToContents();
+                    wb.SaveAs(dlg.FileName);
                 }
+
+                MessageBox.Show("Excel report generated successfully!", "Success");
             }
             catch (Exception ex)
             {
@@ -205,39 +177,9 @@ namespace ARISHrms.Views
 
         private void BtnSavePdf_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_selectedEmpCode))
-            {
-                MessageBox.Show("Please select an employee first", "Warning");
-                return;
-            }
-
-            try
-            {
-                var loans = LoanService.GetActiveLoansByEmployee(_selectedEmpCode);
-
-                string content = $"Loan Report for Employee: {_selectedEmpCode}\n";
-                content += $"Generated: {DateTime.Now:dd-MM-yyyy HH:mm}\n\n";
-
-                foreach (var loan in loans)
-                {
-                    decimal outstanding = LoanService.GetOutstandingBalance(loan.Id, _selectedEmpCode);
-                    content += $"Loan ID: {loan.Id}\n";
-                    content += $"Amount: ₹{loan.LoanAmount}\n";
-                    content += $"EMI: ₹{loan.MonthlyEMI}\n";
-                    content += $"Outstanding: ₹{outstanding}\n";
-                    content += $"Status: {loan.Status}\n\n";
-                }
-
-                // Plain-text report for now; real PDF output would need a PDF library
-                string fileName = $"Loan_Report_{_selectedEmpCode}_{DateTime.Now:yyyyMMdd}.txt";
-                System.IO.File.WriteAllText(fileName, content);
-
-                MessageBox.Show($"Loan report saved to {fileName} (text format, not PDF)", "Success");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving report: {ex.Message}", "Error");
-            }
+            var print = new PrintDialog();
+            if (print.ShowDialog() == true)
+                print.PrintVisual(this, $"Loan Ledger - {_selected?.EmpCode}");
         }
     }
 }

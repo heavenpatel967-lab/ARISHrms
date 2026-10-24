@@ -47,7 +47,7 @@ namespace ARISHrms.Views
         {
             if (CmbDepartment.Items.Count == 0)
             {
-                var depts = _allEmployees.Select(e => e.Department).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(d => d).ToList();
+                var depts = _allEmployees.Select(e => e.DepartmentName).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(d => d).ToList();
                 depts.Insert(0, "All Departments");
                 CmbDepartment.ItemsSource = depts;
                 CmbDepartment.SelectedIndex = 0;
@@ -57,7 +57,7 @@ namespace ARISHrms.Views
                 CmbDesignation.ItemsSource = desigs;
                 CmbDesignation.SelectedIndex = 0;
 
-                var cats = _allEmployees.Select(e => e.Category).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+                var cats = _allEmployees.Select(e => e.CategoryName).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
                 cats.Insert(0, "All Categories");
                 CmbCategory.ItemsSource = cats;
                 CmbCategory.SelectedIndex = 0;
@@ -82,13 +82,13 @@ namespace ARISHrms.Views
 
             // 2. Dropdown Filters
             if (CmbDepartment.SelectedIndex > 0 && CmbDepartment.SelectedItem != null)
-                filtered = filtered.Where(e => e.Department == CmbDepartment.SelectedItem.ToString());
+                filtered = filtered.Where(e => e.DepartmentName == CmbDepartment.SelectedItem.ToString());
 
             if (CmbDesignation.SelectedIndex > 0 && CmbDesignation.SelectedItem != null)
                 filtered = filtered.Where(e => e.Designation == CmbDesignation.SelectedItem.ToString());
 
             if (CmbCategory.SelectedIndex > 0 && CmbCategory.SelectedItem != null)
-                filtered = filtered.Where(e => e.Category == CmbCategory.SelectedItem.ToString());
+                filtered = filtered.Where(e => e.CategoryName == CmbCategory.SelectedItem.ToString());
 
             // 3. Status Filter (0 = All, 1 = Active (Y), 2 = Inactive (N))
             if (CmbStatus.SelectedIndex == 1)
@@ -170,7 +170,7 @@ namespace ARISHrms.Views
                             "YES = remove them (like the old Payroll Companion, which replaced its list on every sync)\n" +
                             "NO = keep them and only add/update\n" +
                             "CANCEL = stop, change nothing\n\n" +
-                            "Employees that have loans, advances, leaves, documents or payslips are always kept.",
+                            "Employees that have village visits or documents are always kept.",
                             "Remove employees that are not in the files?",
                             MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
@@ -204,7 +204,7 @@ namespace ARISHrms.Views
                     sb.AppendLine($"Files used: {string.Join(" > ", scan.SourceFiles.Select(f => f.FileName))}");
                     sb.AppendLine($"Employees imported / updated: {employees.Count}  (active {scan.ActiveCount}, left {scan.LeftCount})");
                     if (removed > 0) sb.AppendLine($"Removed from the app: {removed}");
-                    if (kept > 0) sb.AppendLine($"Kept because they have loans/advances/leaves/documents/payslips: {kept}");
+                    if (kept > 0) sb.AppendLine($"Kept because they have village visits or documents: {kept}");
                 }
                 else
                 {

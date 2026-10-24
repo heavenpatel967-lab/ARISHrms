@@ -39,11 +39,11 @@ namespace ARISHrms
                     MainContentHost.Content = new EmployeesView();
                     break;
                 case "Loans":
-                    TxtCurrentViewTitle.Text = "Loan Ledger & Repayment Health";
+                    TxtCurrentViewTitle.Text = "Loan Ledger (from EasyPay monsum)";
                     MainContentHost.Content = new LoansView();
                     break;
                 case "Advances":
-                    TxtCurrentViewTitle.Text = "Monthly Advance Ledger";
+                    TxtCurrentViewTitle.Text = "Advance Ledger (from EasyPay monsum)";
                     MainContentHost.Content = new AdvancesView();
                     break;
                 case "Leaves":
@@ -54,9 +54,9 @@ namespace ARISHrms
                     TxtCurrentViewTitle.Text = "Employee Document Repository";
                     MainContentHost.Content = new DocumentsView();
                     break;
-                case "Payroll":
-                    TxtCurrentViewTitle.Text = "Salary Slips & Payroll";
-                    MainContentHost.Content = new PayrollView();
+                case "Reports":
+                    TxtCurrentViewTitle.Text = "Late / Absent / Employee History";
+                    MainContentHost.Content = new ReportsView();
                     break;
             }
         }
