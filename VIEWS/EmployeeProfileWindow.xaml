@@ -14,7 +14,7 @@
         <Border Background="White" Padding="15" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="✏️ Edit Details" Click="BtnEdit_Click" Width="130" Height="35" Background="#F59E0B" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
-                <Button Content="🖨️ Print / Save as PDF" Click="BtnPrint_Click" Width="170" Height="35" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
+                <Button Content="🖨️ Print / Save as PDF (all pages)" Click="BtnPrint_Click" Width="230" Height="35" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
                 <Button Content="Close" Click="BtnClose_Click" Width="100" Height="35" Margin="10,0,0,0"/>
             </StackPanel>
         </Border>
@@ -159,11 +159,14 @@
                     <Rectangle Height="1" Fill="#DDDDDD" Margin="0,0,0,20"/>
 
                     <TextBlock Text="REMARKS &amp; TRACK RECORD" FontWeight="Bold" FontSize="16" Foreground="#0078D7" Margin="0,0,0,10"/>
-                    <local:TrackRecordPanel x:Name="TrackRecord" Margin="0,0,0,20" MaxHeight="420"/>
+                    <local:TrackRecordPanel x:Name="TrackRecord" Margin="0,0,0,20"/>
 
                     <Rectangle Height="1" Fill="#DDDDDD" Margin="0,0,0,20"/>
 
-                    <TextBlock Text="VILLAGE VISIT / LONG LEAVE HISTORY" FontWeight="Bold" FontSize="16" Foreground="#0078D7" Margin="0,0,0,10"/>
+                    <DockPanel Margin="0,0,0,10" LastChildFill="False">
+                        <TextBlock Text="VILLAGE VISIT / LONG LEAVE HISTORY" FontWeight="Bold" FontSize="16" Foreground="#0078D7"/>
+                        <TextBlock x:Name="TxtLeaveCount" DockPanel.Dock="Right" Foreground="#64748B" VerticalAlignment="Center"/>
+                    </DockPanel>
                     <DataGrid x:Name="LeaveGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" Background="White" BorderBrush="#CCCCCC"
                               HeadersVisibility="Column" HorizontalGridLinesBrush="#EEEEEE" VerticalGridLinesBrush="Transparent">
                         <DataGrid.Columns>

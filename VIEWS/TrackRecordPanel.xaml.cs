@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -75,26 +75,8 @@ namespace ARISHrms.Views
         }
 
         /// <summary>Village visits for the employee, same rules as the 360 summary.</summary>
-        private static LeaveReliabilityResult LoadLeave(string empCode)
-        {
-            List<VillageVisit> visits;
-            using (var c = new SqliteConnection(DatabaseInitializer.ConnectionString))
-            {
-                c.Open();
-                visits = c.Query<VillageVisit>(
-                    "SELECT * FROM VillageVisits WHERE EmpCode = @code ORDER BY Id ASC", new { code = empCode }).ToList();
-            }
-
-            return LeaveReliability.Build(
-                visits.Select(v => new LeaveInput
-                {
-                    Departure = v.DepartureDate,
-                    ExpectedReturn = v.ExpectedReturn,
-                    ActualReturn = v.ActualReturn,
-                    LateDays = v.LateDays
-                }).ToList(),
-                DateTime.Today);
-        }
+        private static LeaveReliabilityResult LoadLeave(string empCode) =>
+            VillageVisitStore.Reliability(VillageVisitStore.ForEmployee(empCode), DateTime.Today);
 
         private void BtnAddRemark_Click(object sender, RoutedEventArgs e)
         {

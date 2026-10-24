@@ -160,7 +160,7 @@
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                 <Button Content="📥 Import Limits CSV" Click="BtnImportLimits_Click" Width="150" Height="34" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="130" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
-                <Button Content="📄 Save as PDF" Click="BtnSavePdf_Click" Width="130" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
+                <Button Content="🖨️ Print / PDF (all pages)" Click="BtnSavePdf_Click" Width="175" Height="34" Background="#EF4444" Foreground="White" FontWeight="Bold"/>
             </StackPanel>
         </DockPanel>
     </Grid>

@@ -18,6 +18,8 @@ namespace ARISHrms.Views
     public partial class EmployeeProfileWindow : Window
     {
         private readonly Employee _employee;
+        private SummaryFinancials _financials;
+        private string _financialNote = "";
 
         public EmployeeProfileWindow(Employee employee)
         {
@@ -81,12 +83,14 @@ namespace ARISHrms.Views
                 TxtTotalLoan.Text = TxtTotalAdvance.Text = "-";
                 TxtLoanHealth.Text = TxtAdvanceHealth.Text = "-";
                 TxtDataNote.Text = "Loan and advance figures need monsum.DBF. Pick your DBFS folder in Employee Master (Sync DBFS Folder).";
+                _financialNote = TxtDataNote.Text;
                 return;
             }
 
             try
             {
                 var summary = MonsumData.Load(path).BuildSummary(_employee.EmpCode, AdvanceLimitStore.Get(_employee.EmpCode));
+                _financials = summary;
 
                 TxtTotalLoan.Text = $"₹ {summary.TotalLoan:N2}";
                 TxtLoanHealth.Text = summary.LoanHealthText;
@@ -100,6 +104,7 @@ namespace ARISHrms.Views
             {
                 TxtTotalLoan.Text = TxtTotalAdvance.Text = "Data Error";
                 TxtDataNote.Text = "Could not read monsum.DBF: " + ex.Message;
+                _financialNote = TxtDataNote.Text;
             }
         }
 
@@ -107,28 +112,13 @@ namespace ARISHrms.Views
         {
             try
             {
-                List<VillageVisit> visits;
-                using (var connection = new SqliteConnection(DatabaseInitializer.ConnectionString))
-                {
-                    connection.Open();
-                    visits = connection.Query<VillageVisit>(
-                        "SELECT * FROM VillageVisits WHERE EmpCode = @code ORDER BY Id ASC",
-                        new { code = _employee.EmpCode }).ToList();
-                }
+                var visits = VillageVisitStore.ForEmployee(_employee.EmpCode);
 
-                // newest five in the table, like the old page
-                LeaveGrid.ItemsSource = Enumerable.Reverse(visits).Take(5).ToList();
+                // every visit, newest first - nothing is hidden
+                LeaveGrid.ItemsSource = visits.OrderByDescending(v => v.DepartureDate).ThenByDescending(v => v.Id).ToList();
+                TxtLeaveCount.Text = visits.Count == 0 ? "" : $"{visits.Count} visit(s)";
 
-                var reliability = LeaveReliability.Build(
-                    visits.Select(v => new LeaveInput
-                    {
-                        Departure = v.DepartureDate,
-                        ExpectedReturn = v.ExpectedReturn,
-                        ActualReturn = v.ActualReturn,
-                        LateDays = v.LateDays
-                    }).ToList(),
-                    DateTime.Today);
-
+                var reliability = VillageVisitStore.Reliability(visits, DateTime.Today);
                 TxtLeaveHealth.Text = reliability.Text;
                 IcLeaveDots.ItemsSource = reliability.Dots;
             }
@@ -148,13 +138,29 @@ namespace ARISHrms.Views
 
         private void BtnPrint_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new PrintDialog();
-            if (dialog.ShowDialog() != true) return;
+            try
+            {
+                var visits = VillageVisitStore.ForEmployee(_employee.EmpCode);
+                var header = new EmployeeHeader
+                {
+                    Name = TxtFullName.Text, Codes = TxtCodes.Text, Department = TxtDept.Text, Phone = TxtPhone.Text,
+                    Aadhar = TxtAadhar.Text, Village = TxtVillage.Text, Status = TxtStatus.Text
+                };
 
-            TrackRecord.AllowEditing = false;           // no input boxes on paper
-            PrintArea.UpdateLayout();
-            try { dialog.PrintVisual(PrintArea, $"Employee Summary - {_employee.FullName}"); }
-            finally { TrackRecord.AllowEditing = true; }
+                var report = ReportBuilders.EmployeeSummary(
+                    header, _financials, _financialNote,
+                    AdvanceTakenStore.ForEmployee(_employee.EmpCode),
+                    RemarkStore.ForEmployee(_employee.EmpCode),
+                    visits,
+                    VillageVisitStore.Reliability(visits, DateTime.Today),
+                    DateTime.Today);
+
+                ReportPrinter.Print(report, this);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not prepare the report: {ex.Message}", "Print Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();

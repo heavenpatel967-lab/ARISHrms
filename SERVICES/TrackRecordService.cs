@@ -23,6 +23,33 @@ namespace ARISHrms.Services
         public double? Amount { get; set; }               // optional - only for advances not in monsum
         public string Note { get; set; } = "";
         public DateTime CreatedAt { get; set; }
+
+        public string DateDisplay => TakenDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+        public string MonthDisplay => MonthKey != null && MonthKey.Length == 6 ? $"{MonthKey.Substring(0, 4)}-{MonthKey.Substring(4, 2)}" : "";
+        public string AmountDisplay => Amount.HasValue ? $"₹ {Amount.Value:N2}" : "(monsum amount)";
+    }
+
+    /// <summary>All village visits of one employee, oldest first - no limit.</summary>
+    public static class VillageVisitStore
+    {
+        public static List<VillageVisit> ForEmployee(string empCode)
+        {
+            using var c = new SqliteConnection(DatabaseInitializer.ConnectionString);
+            c.Open();
+            return c.Query<VillageVisit>(
+                "SELECT * FROM VillageVisits WHERE EmpCode = @code ORDER BY Id ASC", new { code = empCode }).ToList();
+        }
+
+        public static LeaveReliabilityResult Reliability(IEnumerable<VillageVisit> visits, DateTime today) =>
+            LeaveReliability.Build(
+                visits.Select(v => new LeaveInput
+                {
+                    Departure = v.DepartureDate,
+                    ExpectedReturn = v.ExpectedReturn,
+                    ActualReturn = v.ActualReturn,
+                    LateDays = v.LateDays
+                }).ToList(),
+                today);
     }
 
     public static class AdvanceTakenStore

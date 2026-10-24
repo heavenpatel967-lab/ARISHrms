@@ -349,9 +349,29 @@ namespace ARISHrms.Views
 
         private void BtnSavePdf_Click(object sender, RoutedEventArgs e)
         {
-            var print = new PrintDialog();
-            if (print.ShowDialog() == true)
-                print.PrintVisual(this, $"Advance Ledger - {_selected?.EmpCode}");
+            if (_selected == null)
+            {
+                MessageBox.Show("Please select an employee first", "Warning");
+                return;
+            }
+
+            try
+            {
+                var visits = VillageVisitStore.ForEmployee(_selected.EmpCode);
+                var rows = (AdvanceGrid.ItemsSource as IEnumerable<AdvanceLedgerRow>)?.ToList() ?? new List<AdvanceLedgerRow>();
+                var report = ReportBuilders.AdvanceLedger(
+                    _selected.DisplayName, _summary, CurrentLimit(), rows,
+                    AdvanceTakenStore.ForEmployee(_selected.EmpCode),
+                    RemarkStore.ForEmployee(_selected.EmpCode),
+                    visits,
+                    VillageVisitStore.Reliability(visits, DateTime.Today),
+                    DateTime.Today);
+                ReportPrinter.Print(report, Window.GetWindow(this));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not prepare the report: {ex.Message}", "Print Error");
+            }
         }
     }
 }
