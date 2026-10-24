@@ -40,6 +40,10 @@ namespace ARISHrms.Services
         public string ReportPath { get; set; }
         public string MappingSummary { get; set; } = "";
 
+        /// <summary>Codes that appear in the payroll files (mstsal/monsum) but not in EMPMAS - not imported.</summary>
+        public List<string> PayrollOnlyCodes { get; } = new List<string>();
+        public int BlankNameCount { get; set; }
+
         public string ToReportText()
         {
             var sb = new StringBuilder();
@@ -216,7 +220,32 @@ namespace ARISHrms.Services
                 mappings.AppendLine(DescribeMapping(file.FileName, cols, employees.Count));
             }
 
+            // EMPMAS is the employee master. Codes that only exist in the payroll history files (mstsal / monsum)
+            // are former or cancelled records with no name - importing them only adds blank rows.
+            bool hasMaster = scan.SourceFiles.Count > 0 && scan.SourceFiles[0].Priority == 3 && perFile[0].Count > 0;
+
             var merged = DbfReader.MergeEmployees(perFile);
+            if (hasMaster)
+            {
+                var masterCodes = new HashSet<string>(perFile[0].Select(e => e.EmpCode));
+                scan.PayrollOnlyCodes.AddRange(merged.Where(e => !masterCodes.Contains(e.EmpCode)).Select(e => e.EmpCode));
+                merged = merged.Where(e => masterCodes.Contains(e.EmpCode)).ToList();
+            }
+
+            // The old Payroll Companion showed department and category from the latest monsum row
+            // (the "true" values), falling back to EMPMAS only when monsum has none.
+            for (int i = 0; i < scan.SourceFiles.Count; i++)
+            {
+                if (scan.SourceFiles[i].Priority != 1) continue;
+                var fromMonsum = perFile[i].ToDictionary(e => e.EmpCode, e => e);
+                foreach (var emp in merged)
+                {
+                    if (!fromMonsum.TryGetValue(emp.EmpCode, out var m)) continue;
+                    if (!string.IsNullOrWhiteSpace(m.Department)) emp.Department = m.Department;
+                    if (!string.IsNullOrWhiteSpace(m.Category)) emp.Category = m.Category;
+                }
+            }
+
             if (merged.Count == 0)
                 return merged;
 
@@ -224,14 +253,66 @@ namespace ARISHrms.Services
             if (merged.Any(e => string.IsNullOrEmpty(e.FullName)))
                 FillNamesFromOtherFiles(scan, merged, mappings);
 
+            scan.BlankNameCount = merged.Count(e => string.IsNullOrWhiteSpace(e.FullName));
+
+            // Shift drives the attendance Auto-Fill rules. If no column in the files is called SHIFT, fall back to
+            // the fixed-layout scan the original ARISAttendance app used on the master file.
+            if (hasMaster && merged.All(e => string.IsNullOrEmpty(e.Shift)))
+            {
+                try
+                {
+                    var legacy = DbfReader.ReadEmployeesLegacy(scan.SourceFiles[0].FullPath);
+                    var byCode = new Dictionary<string, Employee>();
+                    foreach (var l in legacy) byCode[l.EmpCode] = l;
+
+                    int filled = 0;
+                    foreach (var emp in merged)
+                    {
+                        if (!byCode.TryGetValue(emp.EmpCode, out var l)) continue;
+                        if (string.IsNullOrWhiteSpace(l.Shift)) continue;
+
+                        // both the code and the card number must agree, so a stray text match can't assign a wrong shift
+                        bool cardAgrees = string.IsNullOrEmpty(emp.CardNo) ||
+                            (long.TryParse(emp.CardNo, out var a) && long.TryParse(l.CardNo, out var b) && a == b);
+                        if (!cardAgrees) continue;
+
+                        emp.Shift = l.Shift.Trim();
+                        filled++;
+                    }
+                    mappings.AppendLine();
+                    mappings.AppendLine(filled > 0
+                        ? $"Shift: no SHIFT column found, so {filled} shift value(s) were read with the original ARISAttendance layout scan."
+                        : "Shift: no SHIFT column found and the original layout scan found nothing - shifts are blank (attendance Auto-Fill treats blank as the 17:00 shift).");
+                }
+                catch { /* shift is optional */ }
+            }
+
             scan.EmployeesImported = merged.Count;
             scan.ActiveCount = merged.Count(e => e.Status != "N");
             scan.LeftCount = merged.Count(e => e.Status == "N");
 
+            if (scan.PayrollOnlyCodes.Count > 0)
+            {
+                mappings.AppendLine();
+                mappings.AppendLine($"Not imported: {scan.PayrollOnlyCodes.Count} code(s) appear only in the payroll files, not in EMPMAS " +
+                                    $"(e.g. {string.Join(", ", scan.PayrollOnlyCodes.Take(8))}{(scan.PayrollOnlyCodes.Count > 8 ? ", ..." : "")}).");
+            }
+            if (scan.BlankNameCount > 0)
+                mappings.AppendLine($"Employees with no name in the files: {scan.BlankNameCount}");
+
+            var left = merged.Where(e => e.Status == "N").Take(6).ToList();
+            if (left.Count > 0)
+            {
+                mappings.AppendLine();
+                mappings.AppendLine("Why employees were marked LEFT (raw LEAVING_DT text; blank/zeros = active):");
+                foreach (var e in left)
+                    mappings.AppendLine($"  {e.EmpCode}: LEAVING_DT = '{e.LeavingRaw}'");
+            }
+
             mappings.AppendLine();
             mappings.AppendLine("First 5 employees:");
             foreach (var e in merged.Take(5))
-                mappings.AppendLine($"  {e.EmpCode} | {e.FullName} | card {e.CardNo} | dept {e.Department} | cat {e.Category} | desig {e.Designation} | basic {e.BasicSalary:0.##} | wage {e.WageType} | status {(string.IsNullOrEmpty(e.Status) ? "-" : e.Status)}");
+                mappings.AppendLine($"  {e.EmpCode} | {e.FullName} | card {e.CardNo} | dept {e.Department} | cat {e.Category} | shift {(string.IsNullOrEmpty(e.Shift) ? "-" : e.Shift)} | desig {e.Designation} | basic {e.BasicSalary:0.##} | wage {e.WageType} | status {(string.IsNullOrEmpty(e.Status) ? "-" : e.Status)}");
             scan.MappingSummary = mappings.ToString();
             return merged;
         }
@@ -296,7 +377,7 @@ namespace ARISHrms.Services
         {
             string M(string col) => col ?? "-";
             return $"{file}: {count} employee(s)\n" +
-                   $"   code={M(c.Code)}  card={M(c.Card)}/{M(c.CompCode)}  name={M(c.Name)}  dept={M(c.Dept)}  cat={M(c.Category)}  " +
+                   $"   code={M(c.Code)}  card={M(c.Card)}/{M(c.CompCode)}  name={M(c.Name)}  dept={M(c.Dept)}  cat={M(c.Category)}  shift={M(c.Shift)}  " +
                    $"desig={M(c.Designation)}  basic={M(c.Basic)}  wage={M(c.WageType)}  month={M(c.YearMonth)}  leaving={M(c.LeavingDate)}";
         }
 
@@ -351,7 +432,7 @@ namespace ARISHrms.Services
         {
             connection.Execute(@"
                         INSERT INTO Employees (EmpCode, CardNo, FullName, Department, Category, Shift, Designation, BasicSalary, WageType, Status)
-                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, COALESCE(NULLIF(@Shift, ''), 'B'), @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'))
+                        VALUES (@EmpCode, @CardNo, @FullName, @Department, @Category, @Shift, @Designation, @BasicSalary, @WageType, COALESCE(NULLIF(@Status, ''), 'Y'))
                         ON CONFLICT(EmpCode) DO UPDATE SET
                             CardNo = CASE WHEN excluded.CardNo <> '' THEN excluded.CardNo ELSE Employees.CardNo END,
                             FullName = CASE WHEN excluded.FullName <> '' THEN excluded.FullName ELSE Employees.FullName END,

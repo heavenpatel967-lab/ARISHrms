@@ -14,9 +14,17 @@ namespace ARISHrms.Models
 
         public string Shift { get; set; }
 
+        // Personal details entered inside this app (kept when the DBF is re-synced)
+        public string Phone { get; set; }
+        public string AadharNo { get; set; }
+        public string NativeVillage { get; set; }
+
         // From the payroll DBF (monsum.dbf: BASIC / WAGE_TYPE)
         public decimal BasicSalary { get; set; }
         public string WageType { get; set; }
+
+        // Raw LEAVING_DT text from the DBF (diagnostics only, not stored)
+        public string LeavingRaw { get; set; }
 
         // Display helpers (not stored in the database)
         public string DisplayName => (string.IsNullOrWhiteSpace(FullName) ? EmpCode : $"{EmpCode} - {FullName}") + (Status == "N" ? "  (left)" : "");

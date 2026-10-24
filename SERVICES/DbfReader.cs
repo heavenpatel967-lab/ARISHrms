@@ -230,7 +230,7 @@ namespace ARISHrms.Services
             Name = FindColumn(table, "EMPNM", "EMPNAME", "NAME", "ENAME", "FULLNAME", "EMPLOYEENAME", "EMPLOYEE", "NAME1"),
             Dept = FindColumn(table, "DEPT", "DEPARTMENT", "DEPTCODE", "DEPTNAME"),
             Category = FindColumn(table, "CAT", "CATEGORY", "CATCODE"),
-            Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE"),
+            Shift = FindColumn(table, "SHIFT", "SHFT", "SHIFTCODE", "SHFTCD", "SHF"),
             Designation = FindColumn(table, "DESIG", "DESIGNATION", "DESIGCODE"),
             Basic = FindColumn(table, "BASIC", "BASICSALARY", "BASICPAY"),
             WageType = FindColumn(table, "WAGETYPE", "WAGETYP"),
@@ -326,7 +326,8 @@ namespace ARISHrms.Services
                     Designation = Get(row, cols.Designation),
                     BasicSalary = ParseDecimal(Get(row, cols.Basic)),
                     WageType = Get(row, cols.WageType),
-                    Status = StatusFromLeaving(Get(row, cols.LeavingDate), cols.LeavingDate != null)
+                    Status = StatusFromLeaving(Get(row, cols.LeavingDate), cols.LeavingDate != null),
+                    LeavingRaw = Get(row, cols.LeavingDate)
                 });
             }
 
@@ -361,6 +362,7 @@ namespace ARISHrms.Services
                     if (cur.BasicSalary <= 0) cur.BasicSalary = e.BasicSalary;
                     if (string.IsNullOrWhiteSpace(cur.WageType)) cur.WageType = e.WageType;
 
+                    if (cur.Status != "N" && e.Status == "N") cur.LeavingRaw = e.LeavingRaw;
                     if (cur.Status == "N" || e.Status == "N") cur.Status = "N";
                     else if (string.IsNullOrEmpty(cur.Status)) cur.Status = e.Status;
                 }

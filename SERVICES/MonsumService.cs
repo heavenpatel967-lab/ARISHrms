@@ -58,6 +58,23 @@ namespace ARISHrms.Services
         public double Limit;
     }
 
+    public class SummaryDot
+    {
+        public string Month { get; set; } = "";
+        public string Color { get; set; } = "";
+    }
+
+    /// <summary>The numbers shown on the 360 degree employee summary (EmployeeSummaryWindow rules).</summary>
+    public class SummaryFinancials
+    {
+        public double TotalLoan;                 // outstanding, never negative
+        public string LoanHealthText = "No Active Loan";
+        public List<SummaryDot> LoanDots = new List<SummaryDot>();
+        public double TotalAdvance;
+        public string AdvanceHealthText = "No Advances Taken";
+        public List<SummaryDot> AdvanceDots = new List<SummaryDot>();
+    }
+
     public class FactoryTotals
     {
         public int Headcount;                 // distinct EMPCD in monsum
@@ -250,6 +267,68 @@ namespace ARISHrms.Services
                 });
             }
             return sum;
+        }
+
+        // ---------------- 360 summary (EmployeeSummaryWindow rules) ----------------
+        /// <summary>
+        /// The summary page matches an employee by code only (not by card) and treats loans and advances a little
+        /// differently from the ledger screens: pending loan is never negative, zero advances are ignored, and a
+        /// month counts as "safe" when its advance is at or below the limit.
+        /// </summary>
+        public SummaryFinancials BuildSummary(string empCode, double advanceLimit)
+        {
+            var result = new SummaryFinancials();
+            var rows = RowsFor(empCode, null);
+
+            // ---- loans ----
+            var monthlyLoan = rows.Where(r => !string.IsNullOrEmpty(r.Month))
+                .GroupBy(r => r.Month).Select(g => g.Last())
+                .OrderBy(r => r.Month, StringComparer.Ordinal).ToList();
+
+            var lastValid = monthlyLoan.LastOrDefault(m => m.PaidLoan > 0 || m.LoanRecovered > 0);
+            double outstanding = lastValid != null ? lastValid.PaidLoan - lastValid.LoanRecovered : 0;
+            result.TotalLoan = Math.Max(0, outstanding);
+
+            int total = 0, paid = 0;
+            var timeline = new List<SummaryDot>();
+            foreach (var m in monthlyLoan)
+            {
+                double pending = Math.Max(0, m.PaidLoan - m.LoanRecovered);
+                if (pending > 0 || m.EmiDeducted > 0)
+                {
+                    total++;
+                    if (m.EmiDeducted > 0) paid++;
+                    timeline.Add(new SummaryDot { Month = m.Month, Color = m.EmiDeducted > 0 ? "#27AE60" : "#FF5252" });
+                }
+            }
+            if (total > 0)
+            {
+                result.LoanHealthText = $"{paid} / {total} Paid";
+                result.LoanDots = timeline.Skip(Math.Max(0, timeline.Count - 6)).ToList();
+            }
+
+            // ---- advances ----
+            var advances = rows.Where(r => r.Advance > 0 && !string.IsNullOrEmpty(r.Month))
+                .GroupBy(r => r.Month).Select(g => g.Last())
+                .OrderBy(r => r.Month, StringComparer.Ordinal).ToList();
+
+            result.TotalAdvance = Math.Max(0, advances.Sum(a => a.Advance));
+
+            int safe = 0;
+            var advTimeline = new List<SummaryDot>();
+            foreach (var a in advances)
+            {
+                bool isSafe = a.Advance <= advanceLimit;
+                if (isSafe) safe++;
+                advTimeline.Add(new SummaryDot { Month = a.Month, Color = isSafe ? "#27AE60" : "#FF5252" });
+            }
+            if (advances.Count > 0)
+            {
+                result.AdvanceHealthText = $"{safe} / {advances.Count} Safe";
+                result.AdvanceDots = advTimeline.Skip(Math.Max(0, advTimeline.Count - 6)).ToList();
+            }
+
+            return result;
         }
 
         // ---------------- factory-wide numbers (DashboardWindow rules) ----------------

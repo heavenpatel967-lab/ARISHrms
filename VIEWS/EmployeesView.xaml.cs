@@ -126,7 +126,8 @@ namespace ARISHrms.Views
         {
             if (EmployeeGrid.SelectedItem is Employee selectedEmp)
             {
-                MessageBox.Show($"Opening 360° Profile for {selectedEmp.FullName} (Code: {selectedEmp.EmpCode})", "Profile View");
+                new EmployeeProfileWindow(selectedEmp) { Owner = Window.GetWindow(this) }.ShowDialog();
+                LoadEmployees();   // the profile window can edit phone / village / name
             }
         }
 
