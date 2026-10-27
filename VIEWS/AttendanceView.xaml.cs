@@ -525,6 +525,19 @@ namespace ARISHrms.Views
             }
         }
 
+        // 📅 Monthly Summary: one employee, one month (read only - does not touch the punches)
+        private void BtnMonthlySummary_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var row = ExceptionGrid.SelectedItem as DailyAttendance;
+                string who = row != null ? row.EmpCode : TxtSearchEmp.Text.Trim();
+                DateTime? month = row != null ? row.WorkDate : (DateTime?)null;
+                new MonthlyAttendanceWindow(who, month) { Owner = Window.GetWindow(this) }.ShowDialog();
+            }
+            catch (Exception ex) { MessageBox.Show($"Error: {ex.Message}", "Monthly Summary", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
         private void BtnSettings_Click(object sender, RoutedEventArgs e) { LoadSettings(); SettingsPanelOverlay.Visibility = Visibility.Visible; }
         private void BtnCloseSettings_Click(object sender, RoutedEventArgs e) => SettingsPanelOverlay.Visibility = Visibility.Collapsed;
 

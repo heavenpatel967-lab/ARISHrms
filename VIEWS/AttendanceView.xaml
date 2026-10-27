@@ -12,15 +12,17 @@
             </Grid.RowDefinitions>
 
             <!-- Top Toolbar -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
                 <Button Content="📥 1. Import (.ddd)" Click="BtnImportDdd_Click" Width="130" Height="32" Background="#3B82F6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📂 2. Import (.dbf)" Click="BtnImportDbf_Click" Width="130" Height="32" Background="#10B981" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="✏️ Edit Selected" Click="BtnEditSelected_Click" Width="120" Height="32" Background="#F59E0B" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="✨ Auto-Fill OUTs" Click="BtnAutoCorrect_Click" Width="130" Height="32" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="🗑️ Clear Punches" Click="BtnClearData_Click" Width="120" Height="32" Background="#EF4444" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
                 <Button Content="📤 Export Final .ddd" Click="BtnExportDdd_Click" Width="140" Height="32" Background="#0F172A" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"/>
+                <Button Content="📅 Monthly Summary" Click="BtnMonthlySummary_Click" Width="150" Height="32" Background="#0E7490" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"
+                        ToolTip="Present days, week offs, absent, overtime and late for one employee for a whole month (select a row first to open on that employee)"/>
                 <Button Content="⚙️ Settings" Click="BtnSettings_Click" Width="100" Height="32" Background="#64748B" Foreground="White" FontWeight="Bold" Margin="0,0,0,0" HorizontalAlignment="Right"/>
-            </StackPanel>
+            </WrapPanel>
 
             <!-- Search & Filters -->
             <DockPanel Grid.Row="1" Margin="0,0,0,10" LastChildFill="False">
