@@ -45,7 +45,8 @@ namespace ARISHrms.Services
         }
     }
 
-    public enum OtRounding { Exact = 0, Down15 = 1, Down30 = 2 }
+    /// <summary>FullHour10 = within 10 minutes of a whole hour (before or after) counts as that whole hour.</summary>
+    public enum OtRounding { Exact = 0, Down15 = 1, Down30 = 2, FullHour10 = 3 }
 
     public class AttendanceDay
     {
@@ -105,7 +106,8 @@ namespace ARISHrms.Services
         public string RuleText =>
             $"{Shift.Label}   ·   late = first punch after {MonthlyAttendance.Clock(Shift.Start.Add(TimeSpan.FromMinutes(MonthlyAttendance.LateGraceMinutes)))}" +
             $"   ·   overtime = last punch after {MonthlyAttendance.Clock(Shift.End)}" +
-            (Rounding == OtRounding.Down15 ? " (rounded down to 15 min)" : Rounding == OtRounding.Down30 ? " (rounded down to 30 min)" : " (exact minutes)") +
+            (Rounding == OtRounding.FullHour10 ? " (within 10 min of a full hour = full hour, e.g. 18:55–19:10 = 2:00)" : Rounding == OtRounding.Down15 ? " (rounded down to 15 min)" : Rounding == OtRounding.Down30 ? " (rounded down to 30 min)" : " (exact minutes)") +
+            "   ·   worked on week off = all worked hours are OT" +
             $"   ·   week off: {(WeekOff.HasValue ? WeekOff.Value.ToString() : "none")}";
     }
 
@@ -133,8 +135,19 @@ namespace ARISHrms.Services
             return p;
         }
 
-        private static int Round(int minutes, OtRounding r) =>
-            r == OtRounding.Down15 ? minutes - minutes % 15 : r == OtRounding.Down30 ? minutes - minutes % 30 : minutes;
+        /// <summary>Snap window for FullHour10: 10 minutes either side of a whole hour.</summary>
+        public const int FullHourWindowMinutes = 10;
+
+        public static int Round(int minutes, OtRounding r)
+        {
+            if (minutes <= 0) return 0;
+            if (r == OtRounding.FullHour10)
+            {
+                int hour = (int)Math.Round(minutes / 60.0, MidpointRounding.AwayFromZero) * 60;
+                return Math.Abs(minutes - hour) <= FullHourWindowMinutes ? hour : minutes;
+            }
+            return r == OtRounding.Down15 ? minutes - minutes % 15 : r == OtRounding.Down30 ? minutes - minutes % 30 : minutes;
+        }
 
         /// <param name="rows">this employee's DailyAttendance rows (any dates - only the month is used)</param>
         /// <param name="dataFrom">first imported date (any employee); days before it have no data</param>
@@ -180,8 +193,15 @@ namespace ARISHrms.Services
                         if (late > LateGraceMinutes) day.LateMinutes = late;
                     }
 
+                    // worked on the week off: the week off is already given, so every worked hour is overtime
+                    // (no late / early out on a day off). Only complete days, same as normal OT.
+                    if (day.IsWeekOffDay)
+                    {
+                        day.LateMinutes = 0;
+                        if (!day.MissingPunch) day.OtMinutes = Round(day.WorkedMinutes, rounding);
+                    }
                     // overtime / early out only when the day is complete (even number of punches)
-                    if (!day.MissingPunch)
+                    else if (!day.MissingPunch)
                     {
                         var last = p[p.Count - 1];
                         var endAt = d.Add(shift.End);
@@ -233,7 +253,7 @@ namespace ARISHrms.Services
                 Items =
                 {
                     ("Present days", C($"{s.Present}" + (s.MissingPunchDays > 0 ? $"   ({s.MissingPunchDays} with a missing punch)" : ""), "#16A34A", true)),
-                    ("Week offs", C($"{s.WeekOffs}" + (s.WorkedOnWeekOff > 0 ? $"   (+ worked on {s.WorkedOnWeekOff} week off day(s), {Hm(s.WorkedOnWeekOffMinutes)} h)" : ""), "#7C3AED", true)),
+                    ("Week offs", C($"{s.WeekOffs}" + (s.WorkedOnWeekOff > 0 ? $"   (+ worked on {s.WorkedOnWeekOff} week off day(s), {Hm(s.WorkedOnWeekOffMinutes)} h - all paid as OT)" : ""), "#7C3AED", true)),
                     ("Absent days", C($"{s.Absent}   (informed {s.AbsentInformed}, without informing {s.AbsentUninformed})", s.Absent > 0 ? "#DC2626" : null, true)),
                     ("Overtime", C($"{Hm(s.OtMinutes)} h on {s.OtDays} day(s)", null, true)),
                     ("Worked hours", C($"{Hm(s.WorkedMinutes)} h")),
@@ -348,8 +368,9 @@ namespace ARISHrms.Services
             catch { }
         }
 
-        public static OtRounding GetRounding() => int.TryParse(Get("OtRounding"), out var r) && r >= 0 && r <= 2 ? (OtRounding)r : OtRounding.Exact;
-        public static void SaveRounding(OtRounding r) => Set("OtRounding", ((int)r).ToString());
+        // new key so everyone starts on the full-hour rule; the choice in the window is still remembered
+        public static OtRounding GetRounding() => int.TryParse(Get("OtRoundingV2"), out var r) && r >= 0 && r <= 3 ? (OtRounding)r : OtRounding.FullHour10;
+        public static void SaveRounding(OtRounding r) => Set("OtRoundingV2", ((int)r).ToString());
 
         public static DayOfWeek? ParseDay(string text)
         {

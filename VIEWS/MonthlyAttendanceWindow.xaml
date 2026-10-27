@@ -36,10 +36,11 @@
             <ComboBox x:Name="CmbWeekOff" Width="120" Height="28" VerticalContentAlignment="Center" SelectionChanged="CmbWeekOff_SelectionChanged"/>
             <TextBlock x:Name="TxtWeekOffSource" VerticalAlignment="Center" Foreground="#94A3B8" FontSize="11" Margin="6,0,18,0"/>
             <TextBlock Text="Overtime:" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,6,0"/>
-            <ComboBox x:Name="CmbRounding" Width="190" Height="28" VerticalContentAlignment="Center" SelectionChanged="CmbRounding_SelectionChanged">
+            <ComboBox x:Name="CmbRounding" Width="200" Height="28" VerticalContentAlignment="Center" SelectionChanged="CmbRounding_SelectionChanged">
                 <ComboBoxItem Content="Exact minutes"/>
                 <ComboBoxItem Content="Round down to 15 min"/>
                 <ComboBoxItem Content="Round down to 30 min"/>
+                <ComboBoxItem Content="Full hour (±10 min)"/>
             </ComboBox>
         </WrapPanel>
 

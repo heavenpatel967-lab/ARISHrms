@@ -117,7 +117,7 @@ namespace ARISHrms.Views
         }
 
         private OtRounding SelectedRounding() =>
-            CmbRounding.SelectedIndex >= 0 && CmbRounding.SelectedIndex <= 2 ? (OtRounding)CmbRounding.SelectedIndex : OtRounding.Exact;
+            CmbRounding.SelectedIndex >= 0 && CmbRounding.SelectedIndex <= 3 ? (OtRounding)CmbRounding.SelectedIndex : OtRounding.FullHour10;
 
         private void BtnPrev_Click(object sender, RoutedEventArgs e) { _month = _month.AddMonths(-1); _monthKnown = true; Refresh(); }
         private void BtnNext_Click(object sender, RoutedEventArgs e) { _month = _month.AddMonths(1); _monthKnown = true; Refresh(); }
@@ -166,10 +166,11 @@ namespace ARISHrms.Views
             AddCard("Present", s.Present.ToString(), "#16A34A",
                 s.WorkedOnWeekOff > 0 ? $"incl. {s.WorkedOnWeekOff} on week off" : "days with punches");
             AddCard("Week offs", s.WeekOffs.ToString(), "#7C3AED",
-                s.WorkedOnWeekOff > 0 ? $"+ worked {s.WorkedOnWeekOff} ({MonthlyAttendance.Hm(s.WorkedOnWeekOffMinutes)} h)" : "not worked");
+                s.WorkedOnWeekOff > 0 ? $"+ worked {s.WorkedOnWeekOff} (all OT)" : "not worked");
             AddCard("Absent", s.Absent.ToString(), s.Absent > 0 ? "#DC2626" : "#0F172A",
                 $"informed {s.AbsentInformed} · without {s.AbsentUninformed}");
-            AddCard("Overtime", MonthlyAttendance.Hm(s.OtMinutes) + " h", "#0E7490", $"on {s.OtDays} day(s)");
+            AddCard("Overtime", MonthlyAttendance.Hm(s.OtMinutes) + " h", "#0E7490",
+                $"on {s.OtDays} day(s)" + (s.WorkedOnWeekOff > 0 ? " incl. week off" : ""));
             AddCard("Worked", MonthlyAttendance.Hm(s.WorkedMinutes) + " h", "#0F172A", "in - out pairs");
             AddCard("Late", s.LateDays.ToString(), s.LateDays > 0 ? "#D97706" : "#0F172A", $"{s.LateMinutes} min in total");
             AddCard("Early out", s.EarlyOutDays.ToString(), s.EarlyOutDays > 0 ? "#D97706" : "#0F172A", $"left before {MonthlyAttendance.Clock(s.Shift.End)}");
