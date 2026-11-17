@@ -120,7 +120,50 @@ namespace ARISHrms.Views
 
         private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Export to Excel will be migrated next.", "In Progress");
+            // exports what the grid shows now (all employees when no filter is set)
+            var shown = (EmployeeGrid.ItemsSource as IEnumerable<Employee>)?.ToList() ?? new List<Employee>();
+            if (shown.Count == 0)
+            {
+                MessageBox.Show("There are no employees to export.", "Export to Excel", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                Title = "Save Employee Master (department wise)",
+                Filter = "Excel Workbook|*.xlsx",
+                FileName = $"EmployeeMaster_DepartmentWise_{DateTime.Today:dd-MM-yyyy}.xlsx"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                Mouse.OverrideCursor = Cursors.Wait;
+                EmployeeExport.Save(shown, dlg.FileName);
+                Mouse.OverrideCursor = null;
+
+                int active = shown.Count(EmployeeExport.IsActive);
+                int depts = shown.Select(x => string.IsNullOrWhiteSpace(x.DepartmentName) ? "" : x.DepartmentName.Trim())
+                                 .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+                if (MessageBox.Show(
+                        $"Saved {shown.Count} employee(s) in {depts} department sheet(s) + a Summary sheet.\n" +
+                        $"Active: {active}   Left / Inactive: {shown.Count - active}\n\n{dlg.FileName}\n\nOpen the file now?",
+                        "Export to Excel", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+                }
+            }
+            catch (System.IO.IOException ex)
+            {
+                Mouse.OverrideCursor = null;
+                MessageBox.Show($"Could not save the file. If it is open in Excel, close it and try again.\n\n{ex.Message}",
+                    "Export to Excel", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                Mouse.OverrideCursor = null;
+                MessageBox.Show($"Could not export: {ex.Message}", "Export to Excel", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void BtnImportPhones_Click(object sender, RoutedEventArgs e)
