@@ -298,7 +298,8 @@ namespace ARISHrms.Services
         /// Combines the monsum advance months with the ticks recorded in this app.
         /// - Each monsum month gets the FIRST tick of that month (the date column shows its date).
         /// - Further ticks in the same month, and ticks for months monsum doesn't have, become their own rows
-        ///   (an advance on a non-regular date). Rows are ordered by month, then by date.
+        ///   (an advance on a non-regular date). Rows are ordered latest month first; inside a month the
+        ///   monsum row comes first, then the added rows newest first. Rows whose month can't be read go last.
         /// </summary>
         public static List<AdvanceLedgerRow> Build(IEnumerable<AdvanceItem> monsumItems, IEnumerable<AdvanceTakenEntry> ticks)
         {
@@ -344,10 +345,13 @@ namespace ARISHrms.Services
                 }
             }
 
+            // latest month first (2026-10 above 2026-09 ...)
             return rows
-                .OrderBy(r => r.MonthKey.Length == 0 ? "" : r.MonthKey, StringComparer.Ordinal)
+                .OrderBy(r => r.MonthKey.Length == 0 ? 1 : 0)
+                .ThenByDescending(r => r.MonthKey, StringComparer.Ordinal)
                 .ThenBy(r => r.FromMonsum ? 0 : 1)
-                .ThenBy(r => r.TakenDate ?? DateTime.MinValue)
+                .ThenByDescending(r => r.TakenDate ?? DateTime.MinValue)
+                .ThenByDescending(r => r.TakenId ?? 0)
                 .ToList();
         }
     }

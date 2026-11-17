@@ -31,6 +31,15 @@
                     </Button.Resources>
                 </Button>
 
+                <Button Content="📞 Import Phones" Click="BtnImportPhones_Click" Width="140" Height="34" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Margin="0,0,10,0"
+                        ToolTip="Fill phone numbers from an Excel sheet (CARD NO. + CONTACT NUMBER columns). Only phone numbers are changed.">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="4"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+
                 <Button Content="📊 Export to Excel" Click="BtnExportExcel_Click" Width="140" Height="34" Background="#10B981" Foreground="White" FontWeight="Bold">
                     <Button.Resources>
                         <Style TargetType="Border">
@@ -46,7 +55,7 @@
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBox x:Name="TxtSearch" Width="200" Height="30" Margin="0,0,15,0" Padding="5,0" 
                          VerticalContentAlignment="Center" TextChanged="Filter_Changed" 
-                         ToolTip="Search Name, Code, or Card No..."/>
+                         ToolTip="Search Name, Code, Card No or Phone..."/>
 
                 <ComboBox x:Name="CmbDepartment" Width="150" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center"/>
                 <ComboBox x:Name="CmbDesignation" Width="150" Height="30" Margin="0,0,15,0" SelectionChanged="Filter_Changed" VerticalContentAlignment="Center"/>
@@ -70,7 +79,8 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Card No" Binding="{Binding CardNo}" Width="90"/>
                     <DataGridTextColumn Header="Emp Code" Binding="{Binding EmpCode}" Width="90"/>
-                    <DataGridTextColumn Header="Employee Name" Binding="{Binding FullName}" Width="250"/>
+                    <DataGridTextColumn Header="Employee Name" Binding="{Binding FullName}" Width="230"/>
+                    <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="170"/>
                     <DataGridTextColumn Header="Department" Binding="{Binding DepartmentName}" Width="150"/>
                     <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="150"/>
                     <DataGridTextColumn Header="Category" Binding="{Binding CategoryName}" Width="140"/>
