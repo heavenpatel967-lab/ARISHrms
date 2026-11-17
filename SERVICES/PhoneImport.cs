@@ -13,10 +13,11 @@ namespace ARISHrms.Services
     /// <summary>One phone number planned for one employee.</summary>
     public class PhoneUpdate
     {
-        public string EmpCode = "";
-        public string Name = "";
-        public string OldPhone = "";
-        public string NewPhone = "";
+        // properties (not fields) - Dapper only reads properties for @EmpCode / @NewPhone
+        public string EmpCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string OldPhone { get; set; } = "";
+        public string NewPhone { get; set; } = "";
     }
 
     /// <summary>What an Excel phone list would change - nothing is saved until <see cref="PhoneImport.Apply"/>.</summary>
