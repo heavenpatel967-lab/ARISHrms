@@ -77,7 +77,8 @@ namespace ARISHrms.Views
                 filtered = filtered.Where(e =>
                     (e.FullName != null && e.FullName.ToLower().Contains(searchText)) ||
                     (e.EmpCode != null && e.EmpCode.ToLower().Contains(searchText)) ||
-                    (e.CardNo != null && e.CardNo.ToLower().Contains(searchText)));
+                    (e.CardNo != null && e.CardNo.ToLower().Contains(searchText)) ||
+                    (e.Phone != null && e.Phone.ToLower().Contains(searchText)));
             }
 
             // 2. Dropdown Filters
@@ -120,6 +121,94 @@ namespace ARISHrms.Views
         private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
         {
             MessageBox.Show("Export to Excel will be migrated next.", "In Progress");
+        }
+
+        private void BtnImportPhones_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Select the Excel sheet with phone numbers (CARD NO. + CONTACT NUMBER)",
+                Filter = "Excel Workbook (*.xlsx;*.xlsm)|*.xlsx;*.xlsm"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            PhoneImportPlan plan;
+            try
+            {
+                Mouse.OverrideCursor = Cursors.Wait;
+                plan = PhoneImport.Plan(dlg.FileName);
+            }
+            catch (System.IO.IOException ex)
+            {
+                MessageBox.Show($"Could not open the file. If it is open in Excel, close it and try again.\n\n{ex.Message}",
+                    "Import Phones", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not read the Excel file: {ex.Message}", "Import Phones", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(plan.ColumnInfo);
+            sb.AppendLine($"Rows with a card number: {plan.RowsRead}");
+            sb.AppendLine($"New numbers (employee had none): {plan.New.Count}");
+            sb.AppendLine($"Already saved, same number: {plan.Same}");
+            sb.AppendLine($"Employee already has a DIFFERENT number: {plan.Different.Count}");
+            if (plan.Empty > 0) sb.AppendLine($"No contact number in the sheet (left as it is): {plan.Empty}");
+            if (plan.Duplicates > 0) sb.AppendLine($"Same employee twice in the sheet (first row used): {plan.Duplicates}");
+            if (plan.NotFound.Count > 0)
+            {
+                sb.AppendLine($"Card number not in Employee Master (skipped): {plan.NotFound.Count}");
+                sb.AppendLine("   " + string.Join("\n   ", plan.NotFound.Take(8)) + (plan.NotFound.Count > 8 ? "\n   ..." : ""));
+            }
+
+            if (plan.New.Count == 0 && plan.Different.Count == 0)
+            {
+                MessageBox.Show(sb + "\nNothing to change.", "Import Phones", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            bool replace = false;
+            if (plan.Different.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Different numbers, saved -> sheet:");
+                foreach (var d in plan.Different.Take(6))
+                    sb.AppendLine($"   {d.EmpCode} {d.Name}: {d.OldPhone} -> {d.NewPhone}");
+                if (plan.Different.Count > 6) sb.AppendLine("   ...");
+                sb.AppendLine();
+                sb.AppendLine("YES = save the new numbers AND replace the different ones with the sheet's number");
+                sb.AppendLine("NO = save the new numbers only, keep the numbers already saved");
+                sb.AppendLine("CANCEL = change nothing");
+
+                var answer = MessageBox.Show(sb.ToString(), "Import Phones", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                if (answer == MessageBoxResult.Cancel) return;
+                replace = answer == MessageBoxResult.Yes;
+            }
+            else
+            {
+                sb.AppendLine();
+                sb.AppendLine($"Save {plan.New.Count} phone number(s)? Only the phone numbers are changed.");
+                if (MessageBox.Show(sb.ToString(), "Import Phones", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                    return;
+            }
+
+            try
+            {
+                int saved = PhoneImport.Apply(plan, replace);
+                LoadEmployees();
+                MessageBox.Show($"{saved} phone number(s) saved.", "Import Phones", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save the phone numbers: {ex.Message}", "Import Phones", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void EmployeeGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

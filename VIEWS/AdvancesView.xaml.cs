@@ -107,7 +107,62 @@ namespace ARISHrms.Views
             Refresh();
         }
 
-        private void Refresh()
+        /// <summary>Reload for a newly picked employee - list starts at the top (latest month).</summary>
+        private void Refresh() => Refresh(false);
+
+        /// <summary>
+        /// Reload the ledger. keepPosition = true after editing a row (tick, date, limit, added date):
+        /// the list stays scrolled where it was and the same row stays selected.
+        /// </summary>
+        private void Refresh(bool keepPosition)
+        {
+            double offset = 0;
+            string selectedKey = null;
+            if (keepPosition)
+            {
+                offset = FindScrollViewer(AdvanceGrid)?.VerticalOffset ?? 0;
+                selectedKey = RowKey(AdvanceGrid.SelectedItem as AdvanceLedgerRow);
+            }
+
+            RefreshCore();
+
+            if (keepPosition) RestorePosition(offset, selectedKey);
+        }
+
+        /// <summary>Identifies a row across reloads: monsum rows by month, added rows by their record id.</summary>
+        private static string RowKey(AdvanceLedgerRow row)
+        {
+            if (row == null) return null;
+            return row.FromMonsum ? "M|" + row.MonthYear : "T|" + row.TakenId;
+        }
+
+        private void RestorePosition(double offset, string selectedKey)
+        {
+            // after the grid has rebuilt its rows (and any focus / bring-into-view scrolling has happened)
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (selectedKey != null && AdvanceGrid.ItemsSource is IEnumerable<AdvanceLedgerRow> rows)
+                {
+                    var match = rows.FirstOrDefault(r => RowKey(r) == selectedKey);
+                    if (match != null) AdvanceGrid.SelectedItem = match;
+                }
+                FindScrollViewer(AdvanceGrid)?.ScrollToVerticalOffset(offset);
+            }), System.Windows.Threading.DispatcherPriority.ContextIdle);
+        }
+
+        private static ScrollViewer FindScrollViewer(DependencyObject root)
+        {
+            if (root == null) return null;
+            if (root is ScrollViewer sv) return sv;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var found = FindScrollViewer(VisualTreeHelper.GetChild(root, i));
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private void RefreshCore()
         {
             AdvanceGrid.ItemsSource = null;
             TrendDotsContainer.Children.Clear();
@@ -174,6 +229,7 @@ namespace ARISHrms.Views
         private void ChkTaken_Click(object sender, RoutedEventArgs e)
         {
             if (_selected == null || !((sender as FrameworkElement)?.DataContext is AdvanceLedgerRow row)) return;
+            AdvanceGrid.SelectedItem = row;   // keep this row highlighted after the reload
 
             try
             {
@@ -199,7 +255,7 @@ namespace ARISHrms.Views
             {
                 MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            Refresh();
+            Refresh(true);
         }
 
         private void DpTakenDate_Changed(object sender, SelectionChangedEventArgs e)
@@ -211,8 +267,9 @@ namespace ARISHrms.Views
             {
                 AdvanceTakenStore.UpdateDate(row.TakenId.Value, dp.SelectedDate.Value);
                 row.TakenDate = dp.SelectedDate.Value.Date;
+                AdvanceGrid.SelectedItem = row;   // keep this row highlighted after the reload
                 // dots and "last on" text depend on the date - refresh after the picker has closed
-                Dispatcher.BeginInvoke(new Action(Refresh), System.Windows.Threading.DispatcherPriority.Background);
+                Dispatcher.BeginInvoke(new Action(() => Refresh(true)), System.Windows.Threading.DispatcherPriority.Background);
             }
             catch (Exception ex)
             {
@@ -239,7 +296,7 @@ namespace ARISHrms.Views
             {
                 MessageBox.Show($"Could not save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            Refresh();
+            Refresh(true);
         }
 
         private void TxtMonthlyLimit_TextChanged(object sender, TextChangedEventArgs e)
@@ -251,7 +308,7 @@ namespace ARISHrms.Views
             {
                 try { AdvanceLimitStore.Set(_selected.EmpCode, limit); } catch { }
             }
-            Refresh();
+            Refresh(true);
         }
 
         private void BtnImportLimits_Click(object sender, RoutedEventArgs e)
